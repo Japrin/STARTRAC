@@ -14,8 +14,8 @@
 #' @examples 
 #' library("Startrac")
 #' dat.file <- system.file("extdata/example.cloneDat.Zhang2018.txt",package = "Startrac")
-#' in.dat <- read.table(dat.file,stringsAsFactors = F,head=T)
-#' out <- Startrac.run(in.dat, proj="CRC", cores=NULL,verbose=F)
+#' in.dat <- read.table(dat.file,stringsAsFactors = FALSE,head=TRUE)
+#' out <- Startrac.run(in.dat, proj="CRC", cores=NULL,verbose=FALSE)
 #' 
 Startrac.run <- function(cell.data, proj="CRC", cores=NULL,verbose=F)
 {

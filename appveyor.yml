@@ -16,9 +16,9 @@ environment:
    R_ARCH: x64
    USE_RTOOLS: true
 
-#build_script:
-#  - travis-tool.sh install_deps
-#  - travis-tool.sh r_binary_install ...
+build_script:
+  - travis-tool.sh install_deps
+  - travis-tool.sh r_binary_install entropy
 #  - travis-tool.sh bioc_install ...
 #  - travis-tool.sh install_github ...
 
