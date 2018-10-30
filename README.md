@@ -1,3 +1,5 @@
+[![Travis CI Build Status](https://travis-ci.org/Japrin/STARTRAC.svg?branch=master)](https://travis-ci.org/Japrin/STARTRAC)
+
 # STARTRAC
 STARTRAC(Single T-cell Analysis by Rna-seq and Tcr TRACking)
 
