@@ -1,0 +1,146 @@
+---
+title: "Single T-cell Analysis by Rna-seq and Tcr TRACking (Startrac)"
+package: Startrac
+date: "`r Sys.Date()`"
+output: 
+  BiocStyle::html_document:
+    toc_float: true    
+  BiocStyle::pdf_document: default
+abstract: |
+  Instructions on how to use Startrac
+vignette: |
+  %\VignetteIndexEntry{Single T-cell Analysis by Rna-seq and Tcr TRACking (Startrac)}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Introduction
+To be added...
+
+# Quick start
+We load the Startrac package and other packages for visualization.
+```{r results='hide', message=FALSE, warning=FALSE}
+library("Startrac")
+library("tictoc")
+library("ggpubr")
+library("ggplot2")
+library("ComplexHeatmap")
+library("RColorBrewer")
+library("circlize")
+```
+
+Then we read in the example data. The input to Startrac should be a data.frame for which the columns 'clone.id', 'patient', 'majorCluster' and 'loc' are required.
+```{r}
+dat.file <- system.file("extdata/example.cloneDat.Zhang2018.txt",
+                        package = "Startrac")
+in.dat <- read.table(dat.file,stringsAsFactors = F,head=T)
+head(in.dat)
+```
+
+Run the pipeline using below command to obtain the indices of the entire data set and data from each patient.
+```{r}
+tic("Startrac.run")
+out <- Startrac.run(in.dat, proj="CRC", cores=NULL,verbose=F)
+toc()
+```
+
+
+# Visualization
+
+## cluster level index of all data
+```{r fig.width=5,fig.height=7}
+ggbarplot(data.table::melt(subset(out$cluster.data,aid=="CRC"),
+                           id.vars=c("aid","majorCluster"),
+                           variable.name="index"),
+          x="majorCluster",y="value",palette = "npg",fill = "index") +
+  facet_wrap(~index,ncol=1,scales = "free_y") +
+  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+```
+
+## cluster level index by patients.
+First, we examine the expansion index.
+```{r fig.width=5,fig.height=4,warning=FALSE}
+ggboxplot(subset(out$cluster.data,aid!="CRC"),
+          x="majorCluster",y="expa",
+          color = "steelblue", add = "point", outlier.colour=NULL) +
+  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+```
+
+Similarly, we examine the migration index and transition index
+```{r fig.width=5,fig.height=4}
+ggboxplot(subset(out$cluster.data,aid!="CRC"),
+          x="majorCluster",y="migr",
+          color = "steelblue", add = "point", outlier.colour=NULL) +
+  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+```
+
+```{r fig.width=5,fig.height=4}
+ggboxplot(subset(out$cluster.data,aid!="CRC"),
+          x="majorCluster",y="tran",
+          color = "steelblue", add = "point", outlier.colour=NULL) +
+  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+```
+
+## pairwise index of all data
+
+migration index between two locations
+```{r fig.width=5,fig.height=7}
+ggbarplot(data.table::melt(subset(out$pIndex.migr,aid=="CRC"),
+                           id.vars=c("aid","majorCluster"),
+                           variable.name="pair"),
+          x="majorCluster",y="value",palette = "npg",fill = "pair") +
+  facet_wrap(~pair,ncol=1,scales = "free_y") +
+  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+```
+
+transition index between two major clusters
+```{r fig.width=8,fig.height=6}
+dat.plot <- as.matrix(subset(out$pIndex.tran,aid=="CRC")[,c(-1,-2)])
+rownames(dat.plot) <- subset(out$pIndex.tran,aid=="CRC")[,2]
+dat.plot[is.na(dat.plot)] <- 0
+col.heat <- colorRamp2(seq(0,0.12,length=15),
+                       colorRampPalette(rev(brewer.pal(n=7,name="RdBu")))(15),
+                       space = "LAB")
+Heatmap(dat.plot,name="pIndex.tran",col = col.heat)
+```
+
+# Step by Step
+
+Construct the Startrac object using the example data. The input data and some derived information are stored in slots, for exmaple `cell.data` for the original input data, `clonotype.dist.cluster` for the distribution of clone along major clusters, `clonotype.dist.loc` for the distribution of clone along locations. The parameter `aid` is used to identify the dataset, it can be the project name or patient id.  
+```{r}
+dat.file <- system.file("extdata/example.cloneDat.Zhang2018.txt",
+                        package = "Startrac")
+in.dat <- read.table(dat.file,stringsAsFactors = F,head=T)
+obj <- new("Startrac",in.dat,aid="CRC")
+```
+
+We can examine these information
+```{r}
+obj@clonotype.dist.cluster[1:3,1:4]
+obj@clonotype.dist.loc[1:3,]
+```
+
+Calculate the cluster level index. The cluster level indices are stored in slot `cluster.data`.
+```{r }
+obj <- calIndex(obj)
+head(obj@cluster.data)
+```
+
+Calculate the pairwise index. 
+```{r }
+tic("pIndex")
+obj <- pIndex(obj)
+toc()
+```
+
+These indices are stored in slot `pIndex.migr` and `pIndex.tran`.
+```{r }
+head(obj@pIndex.migr)
+obj@pIndex.tran[1:3,1:6]
+```
+
+# Session info {.unnumbered}
+
+```{r sessionInfo, echo=FALSE}
+sessionInfo()
+```
