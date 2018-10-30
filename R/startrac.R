@@ -69,7 +69,9 @@ setMethod("show",
 
 #' initialize method for Startrac
 #
-#' @param object A Startrac object
+#' @param .Object A Startrac object
+#' @param cell.data data.frame contains the input data
+#' @param aid character analysis id
 #' @name initialize
 #' @aliases initialize,Startrac-method
 #' @docType methods

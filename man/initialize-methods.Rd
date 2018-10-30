@@ -9,7 +9,11 @@
 \S4method{initialize}{Startrac}(.Object, cell.data, aid = "AID")
 }
 \arguments{
-\item{object}{A Startrac object}
+\item{.Object}{A Startrac object}
+
+\item{cell.data}{data.frame contains the input data}
+
+\item{aid}{character analysis id}
 }
 \value{
 an object of class \code{Startrac}

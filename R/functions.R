@@ -15,7 +15,7 @@
 #' library("Startrac")
 #' dat.file <- system.file("extdata/example.cloneDat.Zhang2018.txt",package = "Startrac")
 #' in.dat <- read.table(dat.file,stringsAsFactors = FALSE,head=TRUE)
-#' out <- Startrac.run(in.dat, proj="CRC", cores=NULL,verbose=FALSE)
+#' out <- Startrac.run(in.dat, proj="CRC", cores=2,verbose=FALSE)
 #' 
 Startrac.run <- function(cell.data, proj="CRC", cores=NULL,verbose=F)
 {
@@ -29,7 +29,7 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,verbose=F)
   if(length(obj.proj@patient.size)>1)
   {
     patient.vec <- names(obj.proj@patient.size[obj.proj@patient.size > 30])
-    registerDoParallel(cores = cores)
+    doParallel::registerDoParallel(cores = cores)
     ##tic("obj.list")
     withCallingHandlers({
       obj.list <- llply(patient.vec,function(pid,cell.data){

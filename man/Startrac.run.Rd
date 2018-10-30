@@ -28,6 +28,6 @@ run the Startrac pipeline
 library("Startrac")
 dat.file <- system.file("extdata/example.cloneDat.Zhang2018.txt",package = "Startrac")
 in.dat <- read.table(dat.file,stringsAsFactors = FALSE,head=TRUE)
-out <- Startrac.run(in.dat, proj="CRC", cores=NULL,verbose=FALSE)
+out <- Startrac.run(in.dat, proj="CRC", cores=2,verbose=FALSE)
 
 }
