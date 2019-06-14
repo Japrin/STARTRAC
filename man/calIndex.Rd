@@ -7,9 +7,10 @@
 \alias{calIndex,Startrac-method}
 \title{Calculate cluster level indices}
 \usage{
-Startrac.calIndex(object, cores, n.perm)
+Startrac.calIndex(object, cores, n.perm, normEntropy)
 
-\S4method{calIndex}{Startrac}(object, cores = NULL, n.perm = NULL)
+\S4method{calIndex}{Startrac}(object, cores = NULL, n.perm = NULL,
+  normEntropy = FALSE)
 }
 \arguments{
 \item{object}{A Startrac object}
@@ -17,6 +18,8 @@ Startrac.calIndex(object, cores, n.perm)
 \item{cores}{number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.}
 
 \item{n.perm}{integer number of permutation will be performed. If NULL, no permutation. (default: NULL)}
+
+\item{normEntropy}{logical; whether normalize migration and transition index. default: FALSE.}
 }
 \value{
 an object of class \code{Startrac}

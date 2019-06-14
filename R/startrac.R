@@ -60,9 +60,8 @@ setValidity("Startrac",
 #
 #' @param object A Startrac object
 #' @name show
-#' @aliases show,Startrac-method
+#' @aliases show,Startrac-method 
 #' @docType methods
-#' @rdname show-methods
 setMethod("show",
   signature = "Startrac",
   definition = function(object) {
@@ -118,46 +117,55 @@ setMethod("initialize",
 #
 #' @name calIndex
 #' @aliases calIndex calIndex,Startrac-method
-#' 
-#' @importFrom entropy entropy.empirical
+#'
 #' @importFrom plyr llply
-#' @importFrom parallel makeCluster stopCluster
+#' @importFrom parallel makeCluster stopCluster detectCores
 #' @importFrom doParallel registerDoParallel
 #' @param object A Startrac object
 #' @param n.perm integer number of permutation will be performed. If NULL, no permutation. (default: NULL)
 #' @param cores number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.
+#' @param normEntropy logical; whether normalize migration and transition index. default: FALSE.
 #' @return an object of class \code{Startrac}
-Startrac.calIndex <- function(object,cores,n.perm) 
+Startrac.calIndex <- function(object,cores,n.perm,normEntropy)
 {
   ### cluster level expansion index (STARTRAC-expa)
   #### Todo: special case: number of clonotype is 1, i.e. sum(x>0)==1
-  .entropy <- apply(object@clonotype.dist.cluster,2,function(x){ entropy.empirical(x,unit="log2") })
-  .entropy.max <- apply(object@clonotype.dist.cluster,2,function(x){ log2(sum(x>0)) })
+  .entropy <- mcol.entropy(object@clonotype.dist.cluster)
+  .entropy.max <- log2(colSums(object@clonotype.dist.cluster > 0))
   object@cluster.data <- data.frame("aid"=object@aid,
                                     "majorCluster"=colnames(object@clonotype.dist.cluster),
                                     "expa"=1-.entropy/.entropy.max,
                                     stringsAsFactors = F)
   ### clone level migration and transition index
+  if(normEntropy){
+    .entropy.migr.max <- log2(ncol(object@clonotype.dist.loc))
+    .entropy.tran.max <- log2(ncol(object@clonotype.dist.cluster))
+  }else{
+    .entropy.migr.max <- 1
+    .entropy.tran.max <- 1
+  }
   object@clonotype.data <- data.frame("clone.id"=rownames(object@clonotype.dist.loc),
-                                      "migr"=apply(object@clonotype.dist.loc,1,entropy.empirical,unit="log2"),
-                                      "tran"=apply(object@clonotype.dist.cluster,1,entropy.empirical,unit="log2"))
+                                      "migr"=mrow.entropy(object@clonotype.dist.loc)/.entropy.migr.max,
+                                      "tran"=mrow.entropy(object@clonotype.dist.cluster)/.entropy.tran.max)
   ### cluster level migration index (STARTRAC-migr) and transition index (STARTRAC-tran)
-  object@cluster.data[["migr"]] <- apply(object@clonotype.dist.cluster,2,function(x){ sum(x*object@clonotype.data[names(x),"migr"])/sum(x) })
-  object@cluster.data[["tran"]] <- apply(object@clonotype.dist.cluster,2,function(x){ sum(x*object@clonotype.data[names(x),"tran"])/sum(x) })
+  weights.mtx <- sweep(object@clonotype.dist.cluster,2,colSums(object@clonotype.dist.cluster),"/")
+  index.mtx <- t(weights.mtx) %*% (as.matrix(object@clonotype.data[,c("migr","tran")]))
+  object@cluster.data <- cbind(object@cluster.data,index.mtx)
   if(!is.null(n.perm)){
-    cl <- makeCluster(if(is.null(cores)) 1 else cores)
-    registerDoParallel(cl)
-    object@cell.perm.data <- llply(seq_len(n.perm),function(i){
-      calIndex(object@cell.perm.data[[i]],cores=1)
+    #cl <- makeCluster(if(is.null(cores)) (detectCores()-2) else cores)
+    #registerDoParallel(cl)
+    registerDoParallel(if(is.null(cores)) (detectCores()-2) else cores)
+    object@cell.perm.data <- llply(object@cell.perm.data,function(x){
+      calIndex(x,cores=1,normEntropy=normEntropy)
     },.progress = "none",.parallel=T)
-    stopCluster(cl)
+    #stopCluster(cl)
     
   }
   return(object)
 }
 
 #' @export
-setGeneric("calIndex", function(object,cores=NULL,n.perm=NULL) standardGeneric("calIndex"))
+setGeneric("calIndex", function(object,cores=NULL,n.perm=NULL,normEntropy=FALSE) standardGeneric("calIndex"))
 
 #' @rdname calIndex
 #' @aliases calIndex
@@ -168,12 +176,11 @@ setMethod("calIndex", signature = "Startrac", definition = Startrac.calIndex)
 #
 #' @name pIndex
 #' @aliases pIndex pIndex,Startrac-method
-#' 
-#' @importFrom entropy entropy.empirical
+#'
 #' @importFrom data.table dcast
 #' @importFrom plyr ldply adply
 #' @importFrom utils combn
-#' @importFrom parallel makeCluster stopCluster
+#' @importFrom parallel makeCluster stopCluster detectCores
 #' @importFrom doParallel registerDoParallel
 #' @param object A Startrac object
 #' @param cores number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.
@@ -181,67 +188,70 @@ setMethod("calIndex", signature = "Startrac", definition = Startrac.calIndex)
 #' @return an object of class \code{Startrac}
 Startrac.pIndex <- function(object,cores,n.perm)
 {
-  cl <- makeCluster(if(is.null(cores)) 1 else cores)
-  registerDoParallel(cl)
   ####### index given two cluster or loc
   ## migr 
   clone.dist.loc.majorCluster <- table(object@cell.data[,c("majorCluster","clone.id","loc")])
-  ##tic("migr")
+  
+  #tic("migr")
   withCallingHandlers({
     cls.migr.index.df <- ldply(seq_len(dim(clone.dist.loc.majorCluster)[1]),function(i,clone.dist.loc.majorCluster){
       dat.cls <- clone.dist.loc.majorCluster[i,,]
       i.name <- dimnames(clone.dist.loc.majorCluster)[["majorCluster"]][i]
       comb.loc <- as.data.frame(t(combn(colnames(dat.cls),2)),stringsAsFactors=F)
       dat.cls.pIndex.migr <- apply(comb.loc,1,function(x){
-        dat.block <- dat.cls[,x]     
-        dat.block.clone.index <- apply(dat.block,1,entropy::entropy.empirical,unit="log2")
+        dat.block <- dat.cls[,x]
+        dat.block.clone.index <- mrow.entropy(dat.block)
         dat.block.clone.index[is.na(dat.block.clone.index)] <- 0
-        sum(dat.block.clone.index*rowSums(dat.block)/sum(dat.block))
+        t(rowSums(dat.block)/sum(dat.block)) %*% dat.block.clone.index
       })
       dat.cls.index <- cbind(data.frame(majorCluster=rep(i.name,nrow(comb.loc)),
                                      pIndex.migr=dat.cls.pIndex.migr,
                                      stringsAsFactors = F),
                           comb.loc)
       return(dat.cls.index)
-    },clone.dist.loc.majorCluster=clone.dist.loc.majorCluster,.progress = "none",.parallel=T)
+    },clone.dist.loc.majorCluster=clone.dist.loc.majorCluster,.progress = "none",.parallel=F)
   },warning=function(w) {
     if(grepl("... may be used in an incorrect context:",conditionMessage(w)))
       ### strange bug, see https://github.com/hadley/plyr/issues/203
       invokeRestart("muffleWarning")
   })
-  ##toc()
+  #toc()
+  
   cls.migr.index.df$crossLoc <- sprintf("%s-%s",cls.migr.index.df$V1,cls.migr.index.df$V2)
   object@pIndex.migr <- dcast(cls.migr.index.df,majorCluster ~ crossLoc,value.var = "pIndex.migr")
   object@pIndex.migr <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.migr)
   
   ## tran
-  ##comb.cls <- as.data.frame(t(combn(colnames(object@clonotype.dist.cluster),2)),stringsAsFactors=F)
   comb.cls <- expand.grid(colnames(object@clonotype.dist.cluster),
                             colnames(object@clonotype.dist.cluster),stringsAsFactors = F)
   comb.cls <- comb.cls[comb.cls[,1]!=comb.cls[,2],]
-  ##tic("tran")
+  
+  #tic("tran")
   withCallingHandlers({
     cls.tran.index.df <- adply(comb.cls,1,function(x,object){
       dat.block <- object@clonotype.dist.cluster[,c(x[[1]],x[[2]])]
-      dat.block.clone.index <- apply(dat.block,1,entropy::entropy.empirical,unit="log2")
+      dat.block.clone.index <- mrow.entropy(dat.block)
       dat.block.clone.index[is.na(dat.block.clone.index)] <- 0
-      data.frame(pIndex.tran=sum(dat.block.clone.index*rowSums(dat.block)/sum(dat.block)))
-    },object=object,.progress = "none",.parallel=T)
+      data.frame(pIndex.tran= t(rowSums(dat.block)/sum(dat.block)) %*% dat.block.clone.index)
+    },object=object,.progress = "none",.parallel=F)
   },warning=function(w) {
     if(grepl("... may be used in an incorrect context:",conditionMessage(w)))
       ### strange bug, see https://github.com/hadley/plyr/issues/203
       invokeRestart("muffleWarning")
   })
-  stopCluster(cl)
-  ##toc()
+  #toc()
   
   object@pIndex.tran <- dcast(cls.tran.index.df,Var2~Var1,value.var = "pIndex.tran")
   colnames(object@pIndex.tran)[1] <- "majorCluster"
   object@pIndex.tran <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.tran)
   if(!is.null(n.perm)){
-    for(i in seq_len(n.perm)){
-      object@cell.perm.data[[i]] <- pIndex(object@cell.perm.data[[i]],cores=cores)
-    }
+    #cl <- makeCluster(if(is.null(cores)) (detectCores()-2)  else cores)
+    #registerDoParallel(cl)
+    registerDoParallel(if(is.null(cores)) (detectCores()-2)  else cores)
+    object@cell.perm.data <- llply(object@cell.perm.data,function(x){
+      pIndex(x,n.perm=NULL)
+    },.progress = "none",.parallel=T)
+    #stopCluster(cl)
   }
   return(object)  
 }
@@ -272,18 +282,22 @@ Startrac.getSig <- function(obj,obj.perm)
   .get.empirical.p <- function(obj,obj.perm,slot.name)
   {
     a.index <- melt(slot(obj,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
-    perm.mtx <- t(laply(obj.perm,function(x){
-      vv <- melt(slot(x,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
-      vv.mtx <- as.matrix(vv[,"value",drop=F])
-      rownames(vv.mtx) <- sprintf("%s.%s",vv[["majorCluster"]],vv[["index"]])
-      colnames(vv.mtx) <- x@aid
-      return(vv.mtx)
-    }))
-    stopifnot(all(sprintf("%s.%s",a.index$majorCluster,a.index$index)==rownames(perm.mtx)))
-    a.index$p.value <- sapply(seq_along(a.index$value),function(i){
-      v.rnd <- perm.mtx[i,]
-      sum(v.rnd >= a.index$value[i])/length(v.rnd)
-    })
+    if(!is.null(obj.perm)){
+      perm.mtx <- t(laply(obj.perm,function(x){
+        vv <- melt(slot(x,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
+        vv.mtx <- as.matrix(vv[,"value",drop=F])
+        rownames(vv.mtx) <- sprintf("%s.%s",vv[["majorCluster"]],vv[["index"]])
+        colnames(vv.mtx) <- x@aid
+        return(vv.mtx)
+      }))
+      stopifnot(all(sprintf("%s.%s",a.index$majorCluster,a.index$index)==rownames(perm.mtx)))
+      a.index$p.value <- sapply(seq_along(a.index$value),function(i){
+        v.rnd <- perm.mtx[i,,drop=F]
+        sum(v.rnd >= a.index$value[i])/length(v.rnd)
+      })
+    }else{
+      a.index$p.value <- NA
+    }
     return(a.index)
   }
   obj@cluster.sig.data <- .get.empirical.p(obj,obj.perm,"cluster.data")
@@ -293,9 +307,157 @@ Startrac.getSig <- function(obj,obj.perm)
 }
 
 #' @export
-setGeneric("getSig", function(obj,obj.perm) standardGeneric("getSig"))
+setGeneric("getSig", function(obj,obj.perm=NULL) standardGeneric("getSig"))
 
 #' @rdname getSig
 #' @aliases getSig
 setMethod("getSig", signature = "Startrac", definition = Startrac.getSig)
+
+
+
+#' The StartracOUt Class
+#'
+#' Object store the result of Startrac.run:
+#' @slot proj character. identification of the object. For example, patient id. default: "AID"
+#' @slot cluster.data data.frame. Each line for a cluster; contain the cluster level indexes information
+#' @slot pIndex.migr data.frame. Each line for a cluster; pairwise migration index between the two locations indicated in the column name.
+#' @slot pIndex.tran data.frame. Each line for a cluster; pairwise transition index betwwen the two major clusters indicated by the row name and column name.
+#' @slot cluster.sig.data data.frame. Each line for a cluster; contains the p values of cluster indices.
+#' @slot pIndex.sig.migr data.frame. Each line for a cluster; contains the p values of pairwise migration indices.
+#' @slot pIndex.sig.tran data.frame. Each line for a cluster; contains the p values of pairwise transition indices.
+#' @slot objects list. other objects
+#' @name StartracOut
+#' @rdname StartracOut
+#' @aliases StartracOut-class
+#' @exportClass StartracOut
+StartracOut <- setClass("StartracOut",
+                     slots = c(proj = "character",
+                               cluster.data = "data.frame",
+                               cluster.sig.data = "data.frame",
+                               pIndex.migr = "data.frame",
+                               pIndex.tran = "data.frame",
+                               pIndex.sig.migr = "data.frame",
+                               pIndex.sig.tran = "data.frame",
+                               objects = "list"))
+
+#' initialize method for StartracOut
+#
+#' @param .Object A StartracOut object
+#' @param proj character analysis id
+#' @aliases initialize,StartracOut-method
+#' @docType methods
+#' @return an object of class \code{StartracOut}
+setMethod("initialize",
+          signature = "StartracOut",
+          definition = function(.Object, proj="AID"){
+            .Object@proj <- proj
+            return(.Object)
+          }
+)
+
+
+#' show method for StartracOut
+#
+#' @importFrom utils head
+#' @param object A StartracOut object
+#' @aliases show,StartracOut-method
+#' @docType methods
+setMethod("show",
+          signature = "StartracOut",
+          definition = function(object) {
+            cat(sprintf("An object of class %s, proj %s:\n",
+                        class(object),
+                        object@proj))
+            cat("head of the clusters' index:\n")
+            print(head(object@cluster.data))
+            cat("head of the pairwise migration index:\n")
+            print(head(object@pIndex.migr))
+            cat("head of the pairwise transition index:\n")
+            print(head(object@pIndex.tran[,1:min(5,ncol(object@pIndex.tran))]))
+            invisible(x = NULL)
+          }
+)
+
+#' plot the indexes
+#
+#' @name plot
+#' @aliases plot plot,StartracOut-method
+#' 
+#' @importFrom plyr laply
+#' @importFrom doParallel registerDoParallel
+#' @importFrom data.table melt as.data.table melt
+#' @importFrom ggpubr ggbarplot ggboxplot
+#' @importFrom ggplot2 facet_wrap theme element_text aes geom_text
+#' @importFrom ComplexHeatmap Heatmap
+#' @importFrom RColorBrewer brewer.pal
+#' @importFrom circlize colorRamp2
+#' @importFrom grDevices colorRampPalette
+#' @param obj A object of StartracOut
+#' @param index.type one of "cluster.all", "pairwise.migr", "pairwise.tran". (default:"cluster.all")
+#' @param byPatient logical. plot indexes of each patient (default: FALSE)
+#' @return a ggplot2 object or Heatmap-class object
+StartracOut.plot <- function(obj,index.type,byPatient)
+{
+  if(index.type=="cluster.all"){
+    if(byPatient){
+      p <- ggboxplot(as.data.table(obj@cluster.sig.data)[aid!=obj@proj,],
+                x="majorCluster",y="value",palette = "npg",
+                color = "index", add = "point", outlier.colour=NULL) +
+        facet_wrap(~index,ncol=1,scales = "free_y") +
+        theme(axis.text.x=element_text(angle = 60,hjust = 1))
+    }else{
+      dat.plot <- as.data.table(obj@cluster.sig.data)[aid==obj@proj,]
+      dat.plot$p.value.label <- ""
+      dat.plot$p.value.label[dat.plot$p.value < 0.05] <- "*"
+      dat.plot$p.value.label[dat.plot$p.value < 0.01] <- "**"
+      dat.plot$p.value.label[dat.plot$p.value < 0.001] <- "***"
+      p <- ggbarplot(dat.plot,
+                    x="majorCluster",y="value",palette = "npg",fill = "index") +
+        facet_wrap(~index,ncol=1,scales = "free_y") +
+        theme(axis.text.x=element_text(angle = 60,hjust = 1))
+      if(!all(is.na(dat.plot$p.value))){
+        p <- p + geom_text(aes(label=p.value.label,y=value+0.01),size=5)
+      }
+    }
+
+  }else if(index.type=="pairwise.migr"){
+    if(byPatient){
+      p <- ggboxplot(as.data.table(obj@pIndex.sig.migr)[aid!=obj@proj,],
+                     x="majorCluster",y="value",palette = "npg",
+                     color = "index", add = "point", outlier.colour=NULL) +
+        facet_wrap(~index,ncol=1,scales = "free_y") +
+        theme(axis.text.x=element_text(angle = 60,hjust = 1))      
+    }else{
+      dat.plot <- as.data.table(obj@pIndex.sig.migr)[aid==obj@proj,]
+      dat.plot$p.value.label <- ""
+      dat.plot$p.value.label[dat.plot$p.value < 0.05] <- "*"
+      dat.plot$p.value.label[dat.plot$p.value < 0.01] <- "**"
+      dat.plot$p.value.label[dat.plot$p.value < 0.001] <- "***"
+      p <- ggbarplot(dat.plot,
+                x="majorCluster",y="value",palette = "npg",fill = "index") +
+        facet_wrap(~index,ncol=1,scales = "free_y") +
+        theme(axis.text.x=element_text(angle = 60,hjust = 1))
+      if(!all(is.na(dat.plot$p.value))){
+        p <- p + geom_text(aes(label=p.value.label,y=value+0.01),size=5)
+      }
+    }
+  }else if(index.type=="pairwise.tran"){
+    dat.plot <- as.matrix(subset(obj@pIndex.tran,aid==obj@proj)[,c(-1,-2)])
+    rownames(dat.plot) <- subset(obj@pIndex.tran,aid==obj@proj)[,2]
+    dat.plot[is.na(dat.plot)] <- 0
+    col.heat <- colorRamp2(seq(0,0.12,length=15),
+                           colorRampPalette(rev(brewer.pal(n=7,name="RdBu")))(15),
+                           space = "LAB")
+    p <- Heatmap(dat.plot,name="pIndex.tran",col = col.heat)
+  }
+  return(p)
+}
+
+#' @export
+setGeneric("plot", function(obj,index.type="cluster.all",byPatient=F) standardGeneric("plot"))
+
+#' @rdname plot
+#' @aliases plot
+setMethod("plot", signature = "StartracOut", definition = StartracOut.plot)
+
 

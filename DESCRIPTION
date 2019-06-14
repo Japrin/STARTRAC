@@ -11,5 +11,5 @@ LazyData: true
 RoxygenNote: 6.1.1
 VignetteBuilder: knitr
 Depends: R (>= 3.4)
-Imports: cowplot, ggplot2, entropy, methods, data.table, doParallel, plyr
-Suggests: knitr
+Imports: cowplot, ggplot2, methods, data.table, doParallel, plyr, ComplexHeatmap, RColorBrewer, circlize, ggpubr
+Suggests: knitr, tictoc

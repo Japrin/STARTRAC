@@ -8,16 +8,34 @@ loginfo <- function(msg) {
   cat(msg)
 }
 
+#' entropy of each row of the input matrix
+#' @param x matrix;
+mrow.entropy <- function(x)
+{
+  freqs <- sweep(x,1,rowSums(x),"/")
+  H = - rowSums(ifelse(freqs>0,freqs* log2(freqs),0))
+  return(H)
+}
+
+#' entropy of each column of the input matrix
+#' @param x matrix;
+mcol.entropy <- function(x)
+{
+  freqs <- sweep(x,2,colSums(x),"/")
+  H = - colSums(ifelse(freqs>0,freqs* log2(freqs),0))
+  return(H)
+}
+
 #' warpper function for Startrac analysis
-#' @importFrom entropy entropy.empirical
 #' @importFrom data.table dcast
 #' @importFrom plyr ldply adply llply
 #' @importFrom parallel makeCluster stopCluster
 #' @importFrom doParallel registerDoParallel
 #' @importFrom methods new slot
+#' @importFrom methods slot<-
 #' @param cell.data data.frame. Each line for a cell, and these columns as required: `Cell_Name`, `clone.id`, `patient`, `majorCluster`, `loc`
 #' @param proj character. String used to annotate the project.
-#' @param cores integer. number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.
+#' @param cores integer. number of core to be used. default: NULL.
 #' @param n.perm integer. number of permutation will be performed. If NULL, no permutation. (default: NULL)
 #' @param verbose logical. wheter return intermediate result (some Startrac objects) 
 #' @details run the Startrac pipeline
@@ -41,6 +59,8 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F
   if(!is.null(n.perm)){ 
     loginfo("get the significance")
     obj.proj <- getSig(obj.proj,obj.proj@cell.perm.data) 
+  }else{
+    obj.proj <- getSig(obj.proj,NULL) 
   }
   ##toc()
   
@@ -49,44 +69,44 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F
   {
     loginfo("calculate indices of each patient ...")
     patient.vec <- names(obj.proj@patient.size[obj.proj@patient.size > 30])
-    cl <- makeCluster(if(is.null(cores)) 1 else cores)
-    registerDoParallel(cl)
-    ##tic("obj.list")
+    #cl <- makeCluster(if(is.null(cores)) (detectCores()-2) else cores)
+    #registerDoParallel(cl)
     withCallingHandlers({
       obj.list <- llply(patient.vec,function(pid,cell.data){
         require("Startrac")
         obj <- new("Startrac",subset(cell.data,patient==pid),aid=pid)
         obj <- calIndex(obj)
         obj <- pIndex(obj,cores=1)
+        obj <- getSig(obj,NULL)
         obj
-      },cell.data=cell.data,.progress = "none",.parallel=T)
+      },cell.data=cell.data,.progress = "none",.parallel=F)
     },warning=function(w) {
       if(grepl("... may be used in an incorrect context:",conditionMessage(w)))
         ### strange bug, see https://github.com/hadley/plyr/issues/203
         invokeRestart("muffleWarning")
     })
-    stopCluster(cl)
-    ##toc()
+    #stopCluster(cl)
   }
   loginfo("collect result")
-  ret <- list()
+  ret <- new("StartracOut",proj=proj)
   ## cluster index
-  ret.slot.names <- c("cluster.data","pIndex.migr","pIndex.tran")
-  if(!is.null(n.perm)){ 
-    ret.slot.names <- c(ret.slot.names,
-                        c("cluster.sig.data","pIndex.sig.migr","pIndex.sig.tran")) 
-  }
+  ret.slot.names <- c("cluster.data","pIndex.migr","pIndex.tran",
+                      "cluster.sig.data","pIndex.sig.migr","pIndex.sig.tran")
+#  if(!is.null(n.perm)){ 
+#    ret.slot.names <- c(ret.slot.names,
+#                        c("cluster.sig.data","pIndex.sig.migr","pIndex.sig.tran")) 
+#  }
   for(v in ret.slot.names)
   {
-    ret[[v]] <- slot(obj.proj,v)
+    slot(ret, v) <- slot(obj.proj,v)
     if(!is.null(obj.list)){
-      ret[[v]] <- rbind(ret[[v]],ldply(obj.list,function(obj){
+      slot(ret, v) <- rbind(slot(ret, v),ldply(obj.list,function(obj){
         slot(obj,v)
       }))
     }
   }
   if(verbose){
-    ret[["objects"]] <- c(obj.proj,obj.list)
+    ret@objects <- c(obj.proj,obj.list)
   }
   loginfo("return")
   return(ret)

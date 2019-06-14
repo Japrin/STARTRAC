@@ -9,7 +9,7 @@
 \usage{
 Startrac.getSig(obj, obj.perm)
 
-\S4method{getSig}{Startrac}(obj, obj.perm)
+\S4method{getSig}{Startrac}(obj, obj.perm = NULL)
 }
 \arguments{
 \item{obj}{A Startrac object}
