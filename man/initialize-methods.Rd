@@ -7,7 +7,7 @@
 \title{initialize method for Startrac}
 \usage{
 \S4method{initialize}{Startrac}(.Object, cell.data, aid = "AID",
-  n.perm = NULL)
+  n.perm = NULL, cores = NULL)
 }
 \arguments{
 \item{.Object}{A Startrac object}
@@ -17,6 +17,8 @@
 \item{aid}{character analysis id}
 
 \item{n.perm}{integer number of permutation will be performed. If NULL, no permutation. (default: NULL)}
+
+\item{cores}{number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.}
 }
 \value{
 an object of class \code{Startrac}

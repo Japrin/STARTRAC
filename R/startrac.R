@@ -80,6 +80,7 @@ setMethod("show",
 #' @param cell.data data.frame contains the input data
 #' @param aid character analysis id
 #' @param n.perm integer number of permutation will be performed. If NULL, no permutation. (default: NULL)
+#' @param cores number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.
 #' @name initialize
 #' @aliases initialize,Startrac-method
 #' @docType methods
@@ -87,7 +88,7 @@ setMethod("show",
 #' @return an object of class \code{Startrac}
 setMethod("initialize",
           signature = "Startrac",
-          definition = function(.Object, cell.data, aid="AID",n.perm=NULL){
+          definition = function(.Object, cell.data, aid="AID",n.perm=NULL,cores=NULL){
             .Object@aid <- aid
             .Object@cell.data <- as.data.frame(cell.data)
             validObject(.Object)
@@ -102,12 +103,12 @@ setMethod("initialize",
                                                         names=.clone2patient$clone.id))
             .Object@cell.perm.data <- list()
             if(!is.null(n.perm)){
-              for(i in seq_len(n.perm)){
-                perm.cell.data <- .Object@cell.data
-                perm.cell.data$clone.id <- perm.cell.data$clone.id[sample(nrow(perm.cell.data))]
-                .Object@cell.perm.data[[i]] <- new("Startrac",perm.cell.data,
-                                                   aid=sprintf("perm%06d",i))
-              }
+                registerDoParallel(if(is.null(cores)) (detectCores()-2) else cores)
+                .Object@cell.perm.data <- llply(seq_len(n.perm),function(i){
+                    perm.cell.data <- .Object@cell.data
+                    perm.cell.data$clone.id <- perm.cell.data$clone.id[sample(nrow(perm.cell.data))]
+                    new("Startrac",perm.cell.data,aid=sprintf("perm%06d",i))
+                },.progress = "none",.parallel=T)
             }
             return(.Object)
           }
@@ -445,7 +446,8 @@ StartracOut.plot <- function(obj,index.type,byPatient)
     dat.plot <- as.matrix(subset(obj@pIndex.tran,aid==obj@proj)[,c(-1,-2)])
     rownames(dat.plot) <- subset(obj@pIndex.tran,aid==obj@proj)[,2]
     dat.plot[is.na(dat.plot)] <- 0
-    col.heat <- colorRamp2(seq(0,0.12,length=15),
+    yrange <- pretty(dat.plot)
+    col.heat <- colorRamp2(seq(0,max(yrange),length=15),
                            colorRampPalette(rev(brewer.pal(n=7,name="RdBu")))(15),
                            space = "LAB")
     p <- Heatmap(dat.plot,name="pIndex.tran",col = col.heat)

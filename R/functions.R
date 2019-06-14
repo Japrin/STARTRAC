@@ -51,7 +51,7 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F
 {
   ##tic("obj.proj")
   loginfo("initialize Startrac ...")
-  obj.proj <- new("Startrac",cell.data,aid=proj,n.perm=n.perm)
+  obj.proj <- new("Startrac",cell.data,aid=proj,n.perm=n.perm,cores=cores)
   loginfo("calculate startrac index ...")
   obj.proj <- calIndex(obj.proj,cores=cores,n.perm=n.perm)
   loginfo("calculate pairwise index ...")
