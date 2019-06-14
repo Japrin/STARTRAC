@@ -1,4 +1,5 @@
 language: r
 sudo: required
 cache: packages
-
+bioc_packages:
+  - ComplexHeatmap
