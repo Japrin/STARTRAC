@@ -40,7 +40,7 @@ head(in.dat)
 Run the pipeline using below command to obtain the indices of the entire data set and data from each patient.
 ```{r}
 tic("Startrac.run")
-out <- Startrac.run(in.dat, proj="CRC", cores=NULL,verbose=F)
+out <- Startrac.run(in.dat, proj="CRC",verbose=F)
 toc()
 ```
 
@@ -49,59 +49,24 @@ toc()
 
 ## cluster level index of all data
 ```{r fig.width=5,fig.height=7}
-ggbarplot(data.table::melt(subset(out$cluster.data,aid=="CRC"),
-                           id.vars=c("aid","majorCluster"),
-                           variable.name="index"),
-          x="majorCluster",y="value",palette = "npg",fill = "index") +
-  facet_wrap(~index,ncol=1,scales = "free_y") +
-  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+plot(out,index.type="cluster.all",byPatient=F)
 ```
 
 ## cluster level index by patients.
-First, we examine the expansion index.
-```{r fig.width=5,fig.height=4,warning=FALSE}
-ggboxplot(subset(out$cluster.data,aid!="CRC"),
-          x="majorCluster",y="expa",
-          color = "steelblue", add = "point", outlier.colour=NULL) +
-  theme(axis.text.x=element_text(angle = 60,hjust = 1))
-```
-
-Similarly, we examine the migration index and transition index
-```{r fig.width=5,fig.height=4}
-ggboxplot(subset(out$cluster.data,aid!="CRC"),
-          x="majorCluster",y="migr",
-          color = "steelblue", add = "point", outlier.colour=NULL) +
-  theme(axis.text.x=element_text(angle = 60,hjust = 1))
-```
-
-```{r fig.width=5,fig.height=4}
-ggboxplot(subset(out$cluster.data,aid!="CRC"),
-          x="majorCluster",y="tran",
-          color = "steelblue", add = "point", outlier.colour=NULL) +
-  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+```{r fig.width=5,fig.height=10,warning=FALSE}
+plot(out,index.type="cluster.all",byPatient=T)
 ```
 
 ## pairwise index of all data
 
 migration index between two locations
 ```{r fig.width=5,fig.height=7}
-ggbarplot(data.table::melt(subset(out$pIndex.migr,aid=="CRC"),
-                           id.vars=c("aid","majorCluster"),
-                           variable.name="pair"),
-          x="majorCluster",y="value",palette = "npg",fill = "pair") +
-  facet_wrap(~pair,ncol=1,scales = "free_y") +
-  theme(axis.text.x=element_text(angle = 60,hjust = 1))
+plot(out,index.type="pairwise.migr",byPatient=F)
 ```
 
 transition index between two major clusters
 ```{r fig.width=8,fig.height=6}
-dat.plot <- as.matrix(subset(out$pIndex.tran,aid=="CRC")[,c(-1,-2)])
-rownames(dat.plot) <- subset(out$pIndex.tran,aid=="CRC")[,2]
-dat.plot[is.na(dat.plot)] <- 0
-col.heat <- colorRamp2(seq(0,0.12,length=15),
-                       colorRampPalette(rev(brewer.pal(n=7,name="RdBu")))(15),
-                       space = "LAB")
-Heatmap(dat.plot,name="pIndex.tran",col = col.heat)
+plot(out,index.type="pairwise.tran",byPatient=T)
 ```
 
 # Step by Step

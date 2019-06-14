@@ -4,7 +4,8 @@
 \alias{Startrac.run}
 \title{warpper function for Startrac analysis}
 \usage{
-Startrac.run(cell.data, proj = "CRC", cores = NULL, verbose = F)
+Startrac.run(cell.data, proj = "CRC", cores = NULL, n.perm = NULL,
+  verbose = F)
 }
 \arguments{
 \item{cell.data}{data.frame. Each line for a cell, and these columns as required: `Cell_Name`, `clone.id`, `patient`, `majorCluster`, `loc`}
@@ -12,6 +13,8 @@ Startrac.run(cell.data, proj = "CRC", cores = NULL, verbose = F)
 \item{proj}{character. String used to annotate the project.}
 
 \item{cores}{integer. number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.}
+
+\item{n.perm}{integer. number of permutation will be performed. If NULL, no permutation. (default: NULL)}
 
 \item{verbose}{logical. wheter return intermediate result (some Startrac objects)}
 }

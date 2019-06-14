@@ -8,6 +8,8 @@ Description: A package implement the Startrac (Single T-cell Analysis by Rna-seq
 License: file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.1
+VignetteBuilder: knitr
 Depends: R (>= 3.4)
 Imports: cowplot, ggplot2, entropy, methods, data.table, doParallel, plyr
+Suggests: knitr

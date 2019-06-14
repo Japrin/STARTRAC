@@ -5,16 +5,18 @@
 \alias{calIndex}
 \alias{Startrac.calIndex}
 \alias{calIndex,Startrac-method}
-\alias{calIndex,Startrac-method}
-\alias{calIndex}
 \title{Calculate cluster level indices}
 \usage{
-Startrac.calIndex(object)
+Startrac.calIndex(object, cores, n.perm)
 
-\S4method{calIndex}{Startrac}(object)
+\S4method{calIndex}{Startrac}(object, cores = NULL, n.perm = NULL)
 }
 \arguments{
 \item{object}{A Startrac object}
+
+\item{cores}{number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.}
+
+\item{n.perm}{integer number of permutation will be performed. If NULL, no permutation. (default: NULL)}
 }
 \value{
 an object of class \code{Startrac}

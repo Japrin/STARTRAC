@@ -6,10 +6,14 @@ NULL
 #' The Startrac object store the data for tcr-based T cell dynamics analyis. The slots contained in Startrac object are listed below:
 #' @slot aid character. aid of the object, used for identification of the object. For example, patient id. default: "AID"
 #' @slot cell.data data.frame. Each line for a cell, and these columns as required: `Cell_Name`, `clone.id`, `patient`, `majorCluster`, `loc`
+#' @slot cell.perm.data object. list of `Startrac`` objects constructed from permutated cell data
 #' @slot clonotype.data data.frame. Each line for a clonotype; contain the clonotype level indexes information
 #' @slot cluster.data data.frame. Each line for a cluster; contain the cluster level indexes information
 #' @slot pIndex.migr data.frame. Each line for a cluster; pairwise migration index between the two locations indicated in the column name.
 #' @slot pIndex.tran data.frame. Each line for a cluster; pairwise transition index betwwen the two major clusters indicated by the row name and column name.
+#' @slot cluster.sig.data data.frame. Each line for a cluster; contains the p values of cluster indices.
+#' @slot pIndex.sig.migr data.frame. Each line for a cluster; contains the p values of pairwise migration indices.
+#' @slot pIndex.sig.tran data.frame. Each line for a cluster; contains the p values of pairwise transition indices.
 #' @slot clonotype.dist.loc matrix. Each line for a clonotype and describe the cells distribution among the locations.
 #' @slot clonotype.dist.cluster matrix. Each line for a clonotype and describe the cells distribution among the clusters.
 #' @slot clust.size array. Number of cells of each major cluster.
@@ -23,10 +27,14 @@ NULL
 Startrac <- setClass("Startrac",
                      slots = c(aid = "character",
                                cell.data = "data.frame",
+                               cell.perm.data = "list",
                                clonotype.data = "data.frame",
                                cluster.data = "data.frame",
+                               cluster.sig.data = "data.frame",
                                pIndex.migr = "data.frame",
                                pIndex.tran = "data.frame",
+                               pIndex.sig.migr = "data.frame",
+                               pIndex.sig.tran = "data.frame",
                                clonotype.dist.loc = "matrix",
                                clonotype.dist.cluster = "matrix",
                                clust.size = "array",
@@ -72,6 +80,7 @@ setMethod("show",
 #' @param .Object A Startrac object
 #' @param cell.data data.frame contains the input data
 #' @param aid character analysis id
+#' @param n.perm integer number of permutation will be performed. If NULL, no permutation. (default: NULL)
 #' @name initialize
 #' @aliases initialize,Startrac-method
 #' @docType methods
@@ -79,7 +88,7 @@ setMethod("show",
 #' @return an object of class \code{Startrac}
 setMethod("initialize",
           signature = "Startrac",
-          definition = function(.Object, cell.data, aid="AID"){
+          definition = function(.Object, cell.data, aid="AID",n.perm=NULL){
             .Object@aid <- aid
             .Object@cell.data <- as.data.frame(cell.data)
             validObject(.Object)
@@ -92,7 +101,15 @@ setMethod("initialize",
             .clone2patient <- unique(.Object@cell.data[,c("patient","clone.id")])
             .Object@clone2patient <- as.array(structure(.clone2patient$patient, 
                                                         names=.clone2patient$clone.id))
-            
+            .Object@cell.perm.data <- list()
+            if(!is.null(n.perm)){
+              for(i in seq_len(n.perm)){
+                perm.cell.data <- .Object@cell.data
+                perm.cell.data$clone.id <- perm.cell.data$clone.id[sample(nrow(perm.cell.data))]
+                .Object@cell.perm.data[[i]] <- new("Startrac",perm.cell.data,
+                                                   aid=sprintf("perm%06d",i))
+              }
+            }
             return(.Object)
           }
 )
@@ -103,9 +120,14 @@ setMethod("initialize",
 #' @aliases calIndex calIndex,Startrac-method
 #' 
 #' @importFrom entropy entropy.empirical
+#' @importFrom plyr llply
+#' @importFrom parallel makeCluster stopCluster
+#' @importFrom doParallel registerDoParallel
 #' @param object A Startrac object
+#' @param n.perm integer number of permutation will be performed. If NULL, no permutation. (default: NULL)
+#' @param cores number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.
 #' @return an object of class \code{Startrac}
-Startrac.calIndex <- function(object) 
+Startrac.calIndex <- function(object,cores,n.perm) 
 {
   ### cluster level expansion index (STARTRAC-expa)
   #### Todo: special case: number of clonotype is 1, i.e. sum(x>0)==1
@@ -122,11 +144,20 @@ Startrac.calIndex <- function(object)
   ### cluster level migration index (STARTRAC-migr) and transition index (STARTRAC-tran)
   object@cluster.data[["migr"]] <- apply(object@clonotype.dist.cluster,2,function(x){ sum(x*object@clonotype.data[names(x),"migr"])/sum(x) })
   object@cluster.data[["tran"]] <- apply(object@clonotype.dist.cluster,2,function(x){ sum(x*object@clonotype.data[names(x),"tran"])/sum(x) })
+  if(!is.null(n.perm)){
+    cl <- makeCluster(if(is.null(cores)) 1 else cores)
+    registerDoParallel(cl)
+    object@cell.perm.data <- llply(seq_len(n.perm),function(i){
+      calIndex(object@cell.perm.data[[i]],cores=1)
+    },.progress = "none",.parallel=T)
+    stopCluster(cl)
+    
+  }
   return(object)
 }
 
 #' @export
-setGeneric("calIndex", function(object) standardGeneric("calIndex"))
+setGeneric("calIndex", function(object,cores=NULL,n.perm=NULL) standardGeneric("calIndex"))
 
 #' @rdname calIndex
 #' @aliases calIndex
@@ -142,13 +173,16 @@ setMethod("calIndex", signature = "Startrac", definition = Startrac.calIndex)
 #' @importFrom data.table dcast
 #' @importFrom plyr ldply adply
 #' @importFrom utils combn
+#' @importFrom parallel makeCluster stopCluster
 #' @importFrom doParallel registerDoParallel
 #' @param object A Startrac object
 #' @param cores number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.
+#' @param n.perm integer number of permutation will be performed. If NULL, no permutation. (default: NULL)
 #' @return an object of class \code{Startrac}
-Startrac.pIndex <- function(object,cores)
+Startrac.pIndex <- function(object,cores,n.perm)
 {
-  registerDoParallel(cores = cores)
+  cl <- makeCluster(if(is.null(cores)) 1 else cores)
+  registerDoParallel(cl)
   ####### index given two cluster or loc
   ## migr 
   clone.dist.loc.majorCluster <- table(object@cell.data[,c("majorCluster","clone.id","loc")])
@@ -198,20 +232,70 @@ Startrac.pIndex <- function(object,cores)
       ### strange bug, see https://github.com/hadley/plyr/issues/203
       invokeRestart("muffleWarning")
   })
+  stopCluster(cl)
   ##toc()
+  
   object@pIndex.tran <- dcast(cls.tran.index.df,Var2~Var1,value.var = "pIndex.tran")
   colnames(object@pIndex.tran)[1] <- "majorCluster"
   object@pIndex.tran <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.tran)
-  
+  if(!is.null(n.perm)){
+    for(i in seq_len(n.perm)){
+      object@cell.perm.data[[i]] <- pIndex(object@cell.perm.data[[i]],cores=cores)
+    }
+  }
   return(object)  
 }
 
 #' @export
-setGeneric("pIndex", function(object,cores=NULL) standardGeneric("pIndex"))
+setGeneric("pIndex", function(object,cores=NULL,n.perm=NULL) standardGeneric("pIndex"))
 
 #' @rdname pIndex
 #' @aliases pIndex
 setMethod("pIndex", signature = "Startrac", definition = Startrac.pIndex)
 
 
+
+
+#' Get the p value given one Startrac object and a list of Startrac objects from permutation data
+#
+#' @name getSig
+#' @aliases getSig getSig,Startrac-method
+#' 
+#' @importFrom plyr laply
+#' @importFrom doParallel registerDoParallel
+#' @importFrom data.table melt
+#' @param obj A Startrac object
+#' @param obj.perm A list of Startrac objects from permutation data 
+#' @return an object of class \code{Startrac}
+Startrac.getSig <- function(obj,obj.perm)
+{
+  .get.empirical.p <- function(obj,obj.perm,slot.name)
+  {
+    a.index <- melt(slot(obj,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
+    perm.mtx <- t(laply(obj.perm,function(x){
+      vv <- melt(slot(x,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
+      vv.mtx <- as.matrix(vv[,"value",drop=F])
+      rownames(vv.mtx) <- sprintf("%s.%s",vv[["majorCluster"]],vv[["index"]])
+      colnames(vv.mtx) <- x@aid
+      return(vv.mtx)
+    }))
+    stopifnot(all(sprintf("%s.%s",a.index$majorCluster,a.index$index)==rownames(perm.mtx)))
+    a.index$p.value <- sapply(seq_along(a.index$value),function(i){
+      v.rnd <- perm.mtx[i,]
+      sum(v.rnd >= a.index$value[i])/length(v.rnd)
+    })
+    return(a.index)
+  }
+  obj@cluster.sig.data <- .get.empirical.p(obj,obj.perm,"cluster.data")
+  obj@pIndex.sig.migr <- .get.empirical.p(obj,obj.perm,"pIndex.migr")
+  obj@pIndex.sig.tran <- .get.empirical.p(obj,obj.perm,"pIndex.tran")
+  return(obj)
+}
+
+#' @export
+setGeneric("getSig", function(obj,obj.perm) standardGeneric("getSig"))
+
+#' @rdname getSig
+#' @aliases getSig
+setMethod("getSig", signature = "Startrac", definition = Startrac.getSig)
 

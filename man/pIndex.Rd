@@ -5,18 +5,18 @@
 \alias{pIndex}
 \alias{Startrac.pIndex}
 \alias{pIndex,Startrac-method}
-\alias{pIndex,Startrac-method}
-\alias{pIndex}
 \title{Calculate pairwise indices}
 \usage{
-Startrac.pIndex(object, cores)
+Startrac.pIndex(object, cores, n.perm)
 
-\S4method{pIndex}{Startrac}(object, cores = NULL)
+\S4method{pIndex}{Startrac}(object, cores = NULL, n.perm = NULL)
 }
 \arguments{
 \item{object}{A Startrac object}
 
 \item{cores}{number of core to be used. Passed to doParallel::registerDoParallel. default: NULL.}
+
+\item{n.perm}{integer number of permutation will be performed. If NULL, no permutation. (default: NULL)}
 }
 \value{
 an object of class \code{Startrac}

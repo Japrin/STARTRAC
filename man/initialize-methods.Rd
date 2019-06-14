@@ -6,7 +6,8 @@
 \alias{initialize,Startrac-method}
 \title{initialize method for Startrac}
 \usage{
-\S4method{initialize}{Startrac}(.Object, cell.data, aid = "AID")
+\S4method{initialize}{Startrac}(.Object, cell.data, aid = "AID",
+  n.perm = NULL)
 }
 \arguments{
 \item{.Object}{A Startrac object}
@@ -14,6 +15,8 @@
 \item{cell.data}{data.frame contains the input data}
 
 \item{aid}{character analysis id}
+
+\item{n.perm}{integer number of permutation will be performed. If NULL, no permutation. (default: NULL)}
 }
 \value{
 an object of class \code{Startrac}

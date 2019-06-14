@@ -15,6 +15,8 @@ The Startrac object store the data for tcr-based T cell dynamics analyis. The sl
 
 \item{\code{cell.data}}{data.frame. Each line for a cell, and these columns as required: `Cell_Name`, `clone.id`, `patient`, `majorCluster`, `loc`}
 
+\item{\code{cell.perm.data}}{object. list of `Startrac`` objects constructed from permutated cell data}
+
 \item{\code{clonotype.data}}{data.frame. Each line for a clonotype; contain the clonotype level indexes information}
 
 \item{\code{cluster.data}}{data.frame. Each line for a cluster; contain the cluster level indexes information}
@@ -22,6 +24,12 @@ The Startrac object store the data for tcr-based T cell dynamics analyis. The sl
 \item{\code{pIndex.migr}}{data.frame. Each line for a cluster; pairwise migration index between the two locations indicated in the column name.}
 
 \item{\code{pIndex.tran}}{data.frame. Each line for a cluster; pairwise transition index betwwen the two major clusters indicated by the row name and column name.}
+
+\item{\code{cluster.sig.data}}{data.frame. Each line for a cluster; contains the p values of cluster indices.}
+
+\item{\code{pIndex.sig.migr}}{data.frame. Each line for a cluster; contains the p values of pairwise migration indices.}
+
+\item{\code{pIndex.sig.tran}}{data.frame. Each line for a cluster; contains the p values of pairwise transition indices.}
 
 \item{\code{clonotype.dist.loc}}{matrix. Each line for a clonotype and describe the cells distribution among the locations.}
 
