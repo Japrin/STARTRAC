@@ -76,6 +76,7 @@ setMethod("show",
 
 #' initialize method for Startrac
 #
+#' @importFrom plyr llply ldply
 #' @param .Object A Startrac object
 #' @param cell.data data.frame contains the input data
 #' @param aid character analysis id
@@ -105,8 +106,12 @@ setMethod("initialize",
             if(!is.null(n.perm)){
                 registerDoParallel(if(is.null(cores)) (detectCores()-2) else cores)
                 .Object@cell.perm.data <- llply(seq_len(n.perm),function(i){
-                    perm.cell.data <- .Object@cell.data
-                    perm.cell.data$clone.id <- perm.cell.data$clone.id[sample(nrow(perm.cell.data))]
+                    perm.cell.data <- ldply(unique(.Object@cell.data$patient),function(pp){
+                      .dat <- subset(.Object@cell.data,patient==pp)
+                      .dat$clone.id <- .dat$clone.id[sample(nrow(.dat))]
+                      return(.dat)
+                    })
+                    ###perm.cell.data$clone.id <- perm.cell.data$clone.id[sample(nrow(perm.cell.data))]
                     new("Startrac",perm.cell.data,aid=sprintf("perm%06d",i))
                 },.progress = "none",.parallel=T)
             }
