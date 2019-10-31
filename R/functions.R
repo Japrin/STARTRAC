@@ -111,3 +111,33 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F
   loginfo("return")
   return(ret)
 }
+
+#' calculate Startrac.dist (tissue distribution preference)
+#' @import data.table
+#' @importFrom plyr aaply
+#' @importFrom stats chisq.test
+#' @param dat.tb data.frame. Each line for a cell, and these columns as required: `majorCluster`, `loc`
+#' @param byPatient logical. whether calculate the index for each patient. (default: FALSE)
+#' @param colname.cluster character. which column specify the cluster (default: "majorCluster")
+#' @param colname.patient character. which column specify the patient  (default: "patient")
+#' @param colname.tissue character. which column specify the tissue  (default: "loc")
+#' @details calculate Startrac.dist (tissue distribution preference) which is based on Chisquare test.
+#' @return an array full of R_{o/e}
+#' @export
+calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
+							  colname.patient="patient",colname.tissue="loc")
+{
+	if(byPatient==F){
+		N.o <- table(dat.tb[[colname.cluster]],dat.tb[[colname.tissue]])
+		res.chisq <- chisq.test(N.o)
+		R.oe <- (res.chisq$observed)/(res.chisq$expected)
+	}else{
+		N.o.byPatient <- table(dat.tb[[colname.patient]],
+							   dat.tb[[cluster.colname]], dat.tb[[colname.tissue]])
+		R.oe <- aaply(N.o.byPatient,1,function(x){
+						 res.chisq <- chisq.test(x)
+						 return((res.chisq$observed)/(res.chisq$expected))
+							  })
+	}
+	return(R.oe)
+}
