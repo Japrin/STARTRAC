@@ -199,21 +199,25 @@ Startrac.pIndex <- function(object,cores,n.perm)
   clone.dist.loc.majorCluster <- table(object@cell.data[,c("majorCluster","clone.id","loc")])
   
   #tic("migr")
+  #clone.dist.loc.majorCluster.debug <<- clone.dist.loc.majorCluster
   withCallingHandlers({
     cls.migr.index.df <- ldply(seq_len(dim(clone.dist.loc.majorCluster)[1]),function(i,clone.dist.loc.majorCluster){
       dat.cls <- clone.dist.loc.majorCluster[i,,]
       i.name <- dimnames(clone.dist.loc.majorCluster)[["majorCluster"]][i]
-      comb.loc <- as.data.frame(t(combn(colnames(dat.cls),2)),stringsAsFactors=F)
-      dat.cls.pIndex.migr <- apply(comb.loc,1,function(x){
-        dat.block <- dat.cls[,x]
-        dat.block.clone.index <- mrow.entropy(dat.block)
-        dat.block.clone.index[is.na(dat.block.clone.index)] <- 0
-        t(rowSums(dat.block)/sum(dat.block)) %*% dat.block.clone.index
-      })
-      dat.cls.index <- cbind(data.frame(majorCluster=rep(i.name,nrow(comb.loc)),
-                                     pIndex.migr=dat.cls.pIndex.migr,
-                                     stringsAsFactors = F),
-                          comb.loc)
+	  dat.cls.index <- NULL
+	  if(!is.null(ncol(dat.cls)) && ncol(dat.cls)>=2){
+		  comb.loc <- as.data.frame(t(combn(colnames(dat.cls),2)),stringsAsFactors=F)
+		  dat.cls.pIndex.migr <- apply(comb.loc,1,function(x){
+			dat.block <- dat.cls[,x]
+			dat.block.clone.index <- mrow.entropy(dat.block)
+			dat.block.clone.index[is.na(dat.block.clone.index)] <- 0
+			t(rowSums(dat.block)/sum(dat.block)) %*% dat.block.clone.index
+		  })
+		  dat.cls.index <- cbind(data.frame(majorCluster=rep(i.name,nrow(comb.loc)),
+										 pIndex.migr=dat.cls.pIndex.migr,
+										 stringsAsFactors = F),
+							  comb.loc)
+	  }
       return(dat.cls.index)
     },clone.dist.loc.majorCluster=clone.dist.loc.majorCluster,.progress = "none",.parallel=F)
   },warning=function(w) {
@@ -222,42 +226,54 @@ Startrac.pIndex <- function(object,cores,n.perm)
       invokeRestart("muffleWarning")
   })
   #toc()
-  
-  cls.migr.index.df$crossLoc <- sprintf("%s-%s",cls.migr.index.df$V1,cls.migr.index.df$V2)
-  object@pIndex.migr <- dcast(cls.migr.index.df,majorCluster ~ crossLoc,value.var = "pIndex.migr")
-  object@pIndex.migr <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.migr)
+  if(!is.null(cls.migr.index.df) && nrow(cls.migr.index.df)>0){
+	  cls.migr.index.df$crossLoc <- sprintf("%s-%s",cls.migr.index.df$V1,cls.migr.index.df$V2)
+	  object@pIndex.migr <- dcast(cls.migr.index.df,majorCluster ~ crossLoc,value.var = "pIndex.migr")
+	  object@pIndex.migr <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.migr)
+  }else{
+	  object@pIndex.migr <- data.frame()
+  }
   
   ## tran
-  comb.cls <- expand.grid(colnames(object@clonotype.dist.cluster),
+  if(!is.null(ncol(object@clonotype.dist.cluster)) && ncol(object@clonotype.dist.cluster)>=2){
+	  ##comb.cls <- as.data.frame(t(combn(colnames(object@clonotype.dist.cluster),2)),stringsAsFactors=F)
+	  comb.cls <- expand.grid(colnames(object@clonotype.dist.cluster),
                             colnames(object@clonotype.dist.cluster),stringsAsFactors = F)
-  comb.cls <- comb.cls[comb.cls[,1]!=comb.cls[,2],]
-  
-  #tic("tran")
-  withCallingHandlers({
-    cls.tran.index.df <- adply(comb.cls,1,function(x,object){
-      dat.block <- object@clonotype.dist.cluster[,c(x[[1]],x[[2]])]
-      dat.block.clone.index <- mrow.entropy(dat.block)
-      dat.block.clone.index[is.na(dat.block.clone.index)] <- 0
-      data.frame(pIndex.tran= t(rowSums(dat.block)/sum(dat.block)) %*% dat.block.clone.index)
-    },object=object,.progress = "none",.parallel=F)
-  },warning=function(w) {
-    if(grepl("... may be used in an incorrect context:",conditionMessage(w)))
-      ### strange bug, see https://github.com/hadley/plyr/issues/203
-      invokeRestart("muffleWarning")
-  })
-  #toc()
-  
-  object@pIndex.tran <- dcast(cls.tran.index.df,Var2~Var1,value.var = "pIndex.tran")
-  colnames(object@pIndex.tran)[1] <- "majorCluster"
-  object@pIndex.tran <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.tran)
-  if(!is.null(n.perm)){
-    #cl <- makeCluster(if(is.null(cores)) (detectCores()-2)  else cores)
-    #registerDoParallel(cl)
-    registerDoParallel(if(is.null(cores)) (detectCores()-2)  else cores)
-    object@cell.perm.data <- llply(object@cell.perm.data,function(x){
-      pIndex(x,n.perm=NULL)
-    },.progress = "none",.parallel=T)
-    #stopCluster(cl)
+      comb.cls <- comb.cls[comb.cls[,1]!=comb.cls[,2],]
+	  
+	  #tic("tran")
+	  withCallingHandlers({
+		cls.tran.index.df <- adply(comb.cls,1,function(x,object){
+		  dat.block <- object@clonotype.dist.cluster[,c(x[[1]],x[[2]])]
+		  dat.block.clone.index <- mrow.entropy(dat.block)
+		  dat.block.clone.index[is.na(dat.block.clone.index)] <- 0
+		  data.frame(pIndex.tran= t(rowSums(dat.block)/sum(dat.block)) %*% dat.block.clone.index)
+		},object=object,.progress = "none",.parallel=F)
+	  },warning=function(w) {
+		if(grepl("... may be used in an incorrect context:",conditionMessage(w)))
+		  ### strange bug, see https://github.com/hadley/plyr/issues/203
+		  invokeRestart("muffleWarning")
+	  })
+	  #toc()
+	  
+	  object@pIndex.tran <- dcast(cls.tran.index.df,Var2~Var1,value.var = "pIndex.tran")
+	  colnames(object@pIndex.tran)[1] <- "majorCluster"
+	  object@pIndex.tran <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.tran)
+
+	  if(!is.null(n.perm)){
+		#cl <- makeCluster(if(is.null(cores)) (detectCores()-2)  else cores)
+		#registerDoParallel(cl)
+		registerDoParallel(if(is.null(cores)) (detectCores()-2)  else cores)
+		object@cell.perm.data <- llply(object@cell.perm.data,function(x){
+		  pIndex(x,n.perm=NULL)
+		},.progress = "none",.parallel=T)
+		#stopCluster(cl)
+	  }
+  }else{
+	  object@pIndex.tran <- data.frame()
+	  if(!is.null(n.perm)){
+		  ### nothing needed to do
+	  }
   }
   return(object)  
 }
@@ -287,6 +303,9 @@ Startrac.getSig <- function(obj,obj.perm)
 {
   .get.empirical.p <- function(obj,obj.perm,slot.name)
   {
+	if(nrow(slot(obj,slot.name))==0){
+		return(data.frame())
+	}
     a.index <- melt(slot(obj,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
     if(!is.null(obj.perm)){
       perm.mtx <- t(laply(obj.perm,function(x){
@@ -406,7 +425,7 @@ StartracOut.plot <- function(obj,index.type,byPatient)
 {
   if(index.type=="cluster.all"){
     if(byPatient){
-      p <- ggboxplot(as.data.table(obj@cluster.sig.data)[aid!=obj@proj,],
+      p <- ggboxplot(as.data.table(obj@cluster.sig.data)[aid!=obj@proj,][order(majorCluster),],
                 x="majorCluster",y="value",palette = "npg",
                 color = "index", add = "point", outlier.colour=NULL) +
         facet_wrap(~index,ncol=1,scales = "free_y") +
@@ -417,18 +436,19 @@ StartracOut.plot <- function(obj,index.type,byPatient)
       dat.plot$p.value.label[dat.plot$p.value < 0.05] <- "*"
       dat.plot$p.value.label[dat.plot$p.value < 0.01] <- "**"
       dat.plot$p.value.label[dat.plot$p.value < 0.001] <- "***"
-      p <- ggbarplot(dat.plot,
+      p <- ggbarplot(dat.plot[order(majorCluster),],
                     x="majorCluster",y="value",palette = "npg",fill = "index") +
         facet_wrap(~index,ncol=1,scales = "free_y") +
-        theme(axis.text.x=element_text(angle = 60,hjust = 1))
+		coord_cartesian(clip="off") +
+        theme(axis.text.x=element_text(angle = 60,hjust = 1),strip.background = element_blank())
       if(!all(is.na(dat.plot$p.value))){
-        p <- p + geom_text(aes(label=p.value.label,y=value+0.01),size=5)
+        p <- p + geom_text(aes(label=p.value.label,y=value),size=5)
       }
     }
 
   }else if(index.type=="pairwise.migr"){
     if(byPatient){
-      p <- ggboxplot(as.data.table(obj@pIndex.sig.migr)[aid!=obj@proj,],
+      p <- ggboxplot(as.data.table(obj@pIndex.sig.migr)[aid!=obj@proj,][order(majorCluster),],
                      x="majorCluster",y="value",palette = "npg",
                      color = "index", add = "point", outlier.colour=NULL) +
         facet_wrap(~index,ncol=1,scales = "free_y") +
@@ -439,12 +459,13 @@ StartracOut.plot <- function(obj,index.type,byPatient)
       dat.plot$p.value.label[dat.plot$p.value < 0.05] <- "*"
       dat.plot$p.value.label[dat.plot$p.value < 0.01] <- "**"
       dat.plot$p.value.label[dat.plot$p.value < 0.001] <- "***"
-      p <- ggbarplot(dat.plot,
+      p <- ggbarplot(dat.plot[order(majorCluster),],
                 x="majorCluster",y="value",palette = "npg",fill = "index") +
         facet_wrap(~index,ncol=1,scales = "free_y") +
-        theme(axis.text.x=element_text(angle = 60,hjust = 1))
+		coord_cartesian(clip="off") +
+        theme(axis.text.x=element_text(angle = 60,hjust = 1),strip.background = element_blank())
       if(!all(is.na(dat.plot$p.value))){
-        p <- p + geom_text(aes(label=p.value.label,y=value+0.01),size=5)
+        p <- p + geom_text(aes(label=p.value.label,y=value),size=5)
       }
     }
   }else if(index.type=="pairwise.tran"){
