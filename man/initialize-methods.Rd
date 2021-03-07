@@ -6,8 +6,7 @@
 \alias{initialize,Startrac-method}
 \title{initialize method for Startrac}
 \usage{
-\S4method{initialize}{Startrac}(.Object, cell.data, aid = "AID",
-  n.perm = NULL, cores = NULL)
+\S4method{initialize}{Startrac}(.Object, cell.data, aid = "AID", n.perm = NULL, cores = NULL)
 }
 \arguments{
 \item{.Object}{A Startrac object}

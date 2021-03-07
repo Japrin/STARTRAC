@@ -141,3 +141,55 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
 	}
 	return(R.oe)
 }
+
+#' calculate the log likelihood ratio of each clonotype, accounting the uncertainty of cluster label assignment
+#' @import data.table
+#' @importFrom plyr llply
+#' @param cellData data.table. Each line for a cell, and these columns as required: `majorCluster`
+#' @param prob.mat matrix Lines for cells, and columns for assignment probability of the majorClusters. row names and column names are required 
+#' @param cloneID.x character. If specified, it will subset the cellData using clonotype id  (default: NULL)
+#' @param verbose logical. control the returned data types. (default: FALSE)
+#' @return a list (verbose==T) or data.table (verbose==F)
+#' @export
+calCloneLLR <- function(cellData,prob.mat,cloneID.x=NULL,verbose=F)
+{
+    if(!is.null(cloneID.x)){
+	cellData <- cellData[cloneID==cloneID.x,]
+    }
+
+    cellData[,majorCluster:=as.character(majorCluster)]
+    cellData <- cellData[order(majorCluster),]
+    cellData.N.tb <- cellData[,.N,by="majorCluster"][order(majorCluster),]
+####	if(!is.null(mcls.range)){
+####	    patch.N.tb <- data.table(majorCluster=setdiff(mcls.range,cellData.N.tb$majorCluster), N=0)
+####	    cellData.N.tb <- rbind(cellData.N.tb,patch.N.tb)
+####	}
+    cellData.N.vec <- structure(cellData.N.tb$N,names=cellData.N.tb$majorCluster)
+    cellData.f.vec <- cellData.N.vec/sum(cellData.N.vec)
+    G.possible.f <- do.call(c,llply(seq_len(length(cellData.f.vec)),function(l){
+	combn(cellData.f.vec,l,simplify=F)
+    }))
+    names(G.possible.f) <- sapply(G.possible.f,function(x){ paste0(names(x),collapse=":")  })
+
+    LL <- do.call(c,llply(names(G.possible.f),function(g){
+	g.f <- G.possible.f[[g]]
+	## L == P(D|G==g)
+	## LL == log(P(D|G==g)) ==sum(log(P(dk|G==g)))
+	LL.g <- sum(apply(cellData,1,function(dk){
+			    prob.k <- prob.mat[ dk[["Cell_Name"]], ]
+			    log10(g.f %*% prob.k[names(g.f)])
+			}))
+	return(LL.g)
+    },.parallel=F))
+    names(LL) <- names(G.possible.f)
+    LL <- sort(LL,decreasing=T)
+    LLR <- unname(LL[1]-LL[2])
+    G.best <- names(LL)[1]
+    if(verbose){
+	return(list("LL"=LL,"LLR"=LLR,"G.best"=G.best))
+    }else{
+	return(data.table("cloneID"=cloneID.x,"LLR"=LLR,"G.best"=G.best))
+    }
+}
+
+

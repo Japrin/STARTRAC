@@ -4,8 +4,13 @@
 \alias{calTissueDist}
 \title{calculate Startrac.dist (tissue distribution preference)}
 \usage{
-calTissueDist(dat.tb, byPatient = F, colname.cluster = "majorCluster",
-  colname.patient = "patient", colname.tissue = "loc")
+calTissueDist(
+  dat.tb,
+  byPatient = F,
+  colname.cluster = "majorCluster",
+  colname.patient = "patient",
+  colname.tissue = "loc"
+)
 }
 \arguments{
 \item{dat.tb}{data.frame. Each line for a cell, and these columns as required: `majorCluster`, `loc`}
