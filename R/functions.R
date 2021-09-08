@@ -185,10 +185,11 @@ calCloneLLR <- function(cellData,prob.mat,cloneID.x=NULL,verbose=F)
     LL <- sort(LL,decreasing=T)
     LLR <- unname(LL[1]-LL[2])
     G.best <- names(LL)[1]
+    G.obs <- paste0(names(cellData.f.vec),collapse=":")
     if(verbose){
-	return(list("LL"=LL,"LLR"=LLR,"G.best"=G.best))
+	return(list("LL"=LL,"LLR"=LLR,"G.best"=G.best,"G.obs"=G.obs))
     }else{
-	return(data.table("cloneID"=cloneID.x,"LLR"=LLR,"G.best"=G.best))
+	return(data.table("cloneID"=cloneID.x,"LLR"=LLR,"G.best"=G.best,"G.obs"=G.obs))
     }
 }
 
