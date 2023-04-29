@@ -26,10 +26,33 @@ mcol.entropy <- function(x)
   return(H)
 }
 
+#' gini_simpson of each column of the input matrix
+#' @param x matrix;
+mcol.gini_simpson <- function(x)
+{
+  freqs <- sweep(x,2,colSums(x),"/")
+  GS <- 1-colSums(freqs^2)
+  return(GS)
+}
+
+#' Gini of the input vector
+#' @param y vector;
+Gini <- function(y)
+{
+  ### https://en.wikipedia.org/wiki/Gini_coefficient
+  y <- y[y>0]
+  y <- sort(y)
+  n <- length(y)
+  G <- 1/n * (n+1 - 2* sum( (n + 1 - 1:n)*y) / sum(y))
+  return(G)
+}
+
+
 #' warpper function for Startrac analysis
 #' @importFrom data.table dcast
 #' @importFrom plyr ldply adply llply
 #' @importFrom parallel makeCluster stopCluster
+#' @importFrom RhpcBLASctl omp_set_num_threads
 #' @importFrom doParallel registerDoParallel
 #' @importFrom methods new slot
 #' @importFrom methods slot<-
@@ -50,6 +73,7 @@ mcol.entropy <- function(x)
 Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F)
 {
   ##tic("obj.proj")
+  RhpcBLASctl::omp_set_num_threads(1)
   loginfo("initialize Startrac ...")
   obj.proj <- new("Startrac",cell.data,aid=proj,n.perm=n.perm,cores=cores)
   loginfo("calculate startrac index ...")

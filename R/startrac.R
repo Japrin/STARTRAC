@@ -104,7 +104,7 @@ setMethod("initialize",
                                                         names=.clone2patient$clone.id))
             .Object@cell.perm.data <- list()
             if(!is.null(n.perm)){
-                registerDoParallel(if(is.null(cores)) (detectCores()-2) else cores)
+                registerDoParallel(cores=if(is.null(cores)) (detectCores()-2) else cores)
                 .Object@cell.perm.data <- llply(seq_len(n.perm),function(i){
                     perm.cell.data <- ldply(unique(.Object@cell.data$patient),function(pp){
                       .dat <- subset(.Object@cell.data,patient==pp)
@@ -138,9 +138,13 @@ Startrac.calIndex <- function(object,cores,n.perm,normEntropy)
   #### Todo: special case: number of clonotype is 1, i.e. sum(x>0)==1
   .entropy <- mcol.entropy(object@clonotype.dist.cluster)
   .entropy.max <- log2(colSums(object@clonotype.dist.cluster > 0))
+  .gini <- apply(object@clonotype.dist.cluster,2,Gini)
+  #.GS <- mcol.gini_simpson(object@clonotype.dist.cluster)
   object@cluster.data <- data.frame("aid"=object@aid,
                                     "majorCluster"=colnames(object@clonotype.dist.cluster),
                                     "expa"=1-.entropy/.entropy.max,
+                                    "gini"=.gini,
+                                    #"gini_simpson"=.GS,
                                     stringsAsFactors = F)
   ### clone level migration and transition index
   if(normEntropy){
@@ -160,7 +164,7 @@ Startrac.calIndex <- function(object,cores,n.perm,normEntropy)
   if(!is.null(n.perm)){
     #cl <- makeCluster(if(is.null(cores)) (detectCores()-2) else cores)
     #registerDoParallel(cl)
-    registerDoParallel(if(is.null(cores)) (detectCores()-2) else cores)
+    registerDoParallel(cores=if(is.null(cores)) (detectCores()-2) else cores)
     object@cell.perm.data <- llply(object@cell.perm.data,function(x){
       calIndex(x,cores=1,normEntropy=normEntropy)
     },.progress = "none",.parallel=T)
@@ -263,9 +267,9 @@ Startrac.pIndex <- function(object,cores,n.perm)
 	  if(!is.null(n.perm)){
 		#cl <- makeCluster(if(is.null(cores)) (detectCores()-2)  else cores)
 		#registerDoParallel(cl)
-		registerDoParallel(if(is.null(cores)) (detectCores()-2)  else cores)
+		registerDoParallel(cores=if(is.null(cores)) (detectCores()-2)  else cores)
 		object@cell.perm.data <- llply(object@cell.perm.data,function(x){
-		  pIndex(x,n.perm=NULL)
+		  pIndex(x,cores=1,n.perm=NULL)
 		},.progress = "none",.parallel=T)
 		#stopCluster(cl)
 	  }
@@ -294,7 +298,6 @@ setMethod("pIndex", signature = "Startrac", definition = Startrac.pIndex)
 #' @aliases getSig getSig,Startrac-method
 #' 
 #' @importFrom plyr laply
-#' @importFrom doParallel registerDoParallel
 #' @importFrom data.table melt
 #' @param obj A Startrac object
 #' @param obj.perm A list of Startrac objects from permutation data 
@@ -409,7 +412,6 @@ setMethod("show",
 #' @aliases plot plot,StartracOut-method
 #' 
 #' @importFrom plyr laply
-#' @importFrom doParallel registerDoParallel
 #' @importFrom data.table melt as.data.table melt
 #' @importFrom ggpubr ggbarplot ggboxplot
 #' @importFrom ggplot2 facet_wrap theme element_text aes geom_text
