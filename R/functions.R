@@ -60,7 +60,7 @@ Gini <- function(y)
 #' @param proj character. String used to annotate the project.
 #' @param cores integer. number of core to be used. default: NULL.
 #' @param n.perm integer. number of permutation will be performed. If NULL, no permutation. (default: NULL)
-#' @param verbose logical. wheter return intermediate result (some Startrac objects) 
+#' @param verbose integer. verbose level indicate how to include intermediate result (some Startrac objects)
 #' @details run the Startrac pipeline
 #' @return an list contains data.frame elements "cluster.data","pIndex.migr" and "pIndex.tran"
 #' @export
@@ -70,7 +70,7 @@ Gini <- function(y)
 #' in.dat <- read.table(dat.file,stringsAsFactors = FALSE,head=TRUE)
 #' out <- Startrac.run(in.dat, proj="CRC", cores=2,verbose=FALSE)
 #' 
-Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F)
+Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0)
 {
   ##tic("obj.proj")
   RhpcBLASctl::omp_set_num_threads(1)
@@ -129,8 +129,10 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=F
       }))
     }
   }
-  if(verbose){
-    ret@objects <- c(obj.proj,obj.list)
+  if(verbose==1){
+      ret@objects <- c(obj.proj)
+  }else if(verbose==2){
+      ret@objects <- c(obj.proj,obj.list)
   }
   loginfo("return")
   return(ret)

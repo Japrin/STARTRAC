@@ -4,7 +4,7 @@
 \alias{Startrac.run}
 \title{warpper function for Startrac analysis}
 \usage{
-Startrac.run(cell.data, proj = "CRC", cores = NULL, n.perm = NULL, verbose = F)
+Startrac.run(cell.data, proj = "CRC", cores = NULL, n.perm = NULL, verbose = 0)
 }
 \arguments{
 \item{cell.data}{data.frame. Each line for a cell, and these columns as required: `Cell_Name`, `clone.id`, `patient`, `majorCluster`, `loc`}
@@ -15,7 +15,7 @@ Startrac.run(cell.data, proj = "CRC", cores = NULL, n.perm = NULL, verbose = F)
 
 \item{n.perm}{integer. number of permutation will be performed. If NULL, no permutation. (default: NULL)}
 
-\item{verbose}{logical. wheter return intermediate result (some Startrac objects)}
+\item{verbose}{integer. verbose level indicate how to include intermediate result (some Startrac objects)}
 }
 \value{
 an list contains data.frame elements "cluster.data","pIndex.migr" and "pIndex.tran"

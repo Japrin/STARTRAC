@@ -69,7 +69,7 @@ setMethod("show",
                 class(object),
                 object@aid,
                 nrow(object@cell.data),
-                nrow(object@clonotype.data)))
+                length(object@clone.size)))
     invisible(x = NULL)
   }
 )
@@ -144,6 +144,7 @@ Startrac.calIndex <- function(object,cores,n.perm,normEntropy)
                                     "majorCluster"=colnames(object@clonotype.dist.cluster),
                                     "expa"=1-.entropy/.entropy.max,
                                     "gini"=.gini,
+                                    "NCells"=colSums(object@clonotype.dist.cluster),
                                     #"gini_simpson"=.GS,
                                     stringsAsFactors = F)
   ### clone level migration and transition index
@@ -233,7 +234,10 @@ Startrac.pIndex <- function(object,cores,n.perm)
   if(!is.null(cls.migr.index.df) && nrow(cls.migr.index.df)>0){
 	  cls.migr.index.df$crossLoc <- sprintf("%s-%s",cls.migr.index.df$V1,cls.migr.index.df$V2)
 	  object@pIndex.migr <- dcast(cls.migr.index.df,majorCluster ~ crossLoc,value.var = "pIndex.migr")
-	  object@pIndex.migr <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.migr)
+	  object@pIndex.migr <- cbind(data.frame(aid=object@aid,
+                                             NCells=object@clust.size[ object@pIndex.migr[["majorCluster"]] ],
+                                             stringsAsFactors = F),
+                                  object@pIndex.migr)
   }else{
 	  object@pIndex.migr <- data.frame()
   }
@@ -262,7 +266,10 @@ Startrac.pIndex <- function(object,cores,n.perm)
 	  
 	  object@pIndex.tran <- dcast(cls.tran.index.df,Var2~Var1,value.var = "pIndex.tran")
 	  colnames(object@pIndex.tran)[1] <- "majorCluster"
-	  object@pIndex.tran <- cbind(data.frame(aid=object@aid,stringsAsFactors = F),object@pIndex.tran)
+	  object@pIndex.tran <- cbind(data.frame(aid=object@aid,
+                                             NCells=object@clust.size[ object@pIndex.tran[["majorCluster"]] ],
+                                             stringsAsFactors = F),
+                                  object@pIndex.tran)
 
 	  if(!is.null(n.perm)){
 		#cl <- makeCluster(if(is.null(cores)) (detectCores()-2)  else cores)
@@ -309,10 +316,10 @@ Startrac.getSig <- function(obj,obj.perm)
 	if(nrow(slot(obj,slot.name))==0){
 		return(data.frame())
 	}
-    a.index <- melt(slot(obj,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
+    a.index <- melt(slot(obj,slot.name),id.vars=c("aid","majorCluster","NCells"),variable.name="index")
     if(!is.null(obj.perm)){
       perm.mtx <- t(laply(obj.perm,function(x){
-        vv <- melt(slot(x,slot.name),id.vars=c("aid","majorCluster"),variable.name="index")
+        vv <- melt(slot(x,slot.name),id.vars=c("aid","majorCluster","NCells"),variable.name="index")
         vv.mtx <- as.matrix(vv[,"value",drop=F])
         rownames(vv.mtx) <- sprintf("%s.%s",vv[["majorCluster"]],vv[["index"]])
         colnames(vv.mtx) <- x@aid
@@ -401,7 +408,11 @@ setMethod("show",
             cat("head of the pairwise migration index:\n")
             print(head(object@pIndex.migr))
             cat("head of the pairwise transition index:\n")
-            print(head(object@pIndex.tran[,1:min(5,ncol(object@pIndex.tran))]))
+            if(ncol(object@pIndex.tran)>0){
+                print(head(object@pIndex.tran[,1:min(5,ncol(object@pIndex.tran))]))
+            }else{
+                print(head(object@pIndex.tran))
+            }
             invisible(x = NULL)
           }
 )
