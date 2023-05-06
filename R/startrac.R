@@ -331,7 +331,7 @@ Startrac.getSig <- function(obj,obj.perm)
         sum(v.rnd >= a.index$value[i])/length(v.rnd)
       })
     }else{
-      a.index$p.value <- NA
+      a.index$p.value <- NA_real_
     }
     return(a.index)
   }
@@ -460,6 +460,7 @@ StartracOut.plot <- function(obj,index.type,byPatient)
     }
 
   }else if(index.type=="pairwise.migr"){
+    if(nrow(obj@pIndex.sig.migr)==0){ return(NULL) }
     if(byPatient){
       p <- ggboxplot(as.data.table(obj@pIndex.sig.migr)[aid!=obj@proj,][order(majorCluster),],
                      x="majorCluster",y="value",palette = "npg",
@@ -482,8 +483,9 @@ StartracOut.plot <- function(obj,index.type,byPatient)
       }
     }
   }else if(index.type=="pairwise.tran"){
-    dat.plot <- as.matrix(subset(obj@pIndex.tran,aid==obj@proj)[,c(-1,-2)])
-    rownames(dat.plot) <- subset(obj@pIndex.tran,aid==obj@proj)[,2]
+    if(nrow(obj@pIndex.tran)==0){ return(NULL) }
+    dat.plot <- as.matrix(subset(obj@pIndex.tran,aid==obj@proj)[,c(-1,-2,-3)])
+    rownames(dat.plot) <- subset(obj@pIndex.tran,aid==obj@proj)[,3]
     dat.plot[is.na(dat.plot)] <- 0
     yrange <- pretty(dat.plot)
     col.heat <- colorRamp2(seq(0,max(yrange),length=15),
