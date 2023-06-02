@@ -147,25 +147,77 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0
 #' @param colname.cluster character. which column specify the cluster (default: "majorCluster")
 #' @param colname.patient character. which column specify the patient  (default: "patient")
 #' @param colname.tissue character. which column specify the tissue  (default: "loc")
+#' @param method character. method to use, one of "chisq", "fisher"  (default: "chisq")
+#' @param min.rowSum integer. rows with rowSum <= this value will be filtered out (default: 0)
 #' @details calculate Startrac.dist (tissue distribution preference) which is based on Chisquare test.
-#' @return an array full of R_{o/e}
+#' @return an array full of R_{o/e} (method="chisq") or list with components of OR, p.value etc. from fisher.test (method="fisher")
 #' @export
 calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
-							  colname.patient="patient",colname.tissue="loc")
+							  colname.patient="patient",colname.tissue="loc",
+                              method="chisq",min.rowSum=0)
 {
+
+    .table.fisher <- function(count.dist)
+    {
+        sum.col <- colSums(count.dist)
+        sum.row <- rowSums(count.dist)
+        count.dist.tb <- as.data.frame(unclass(count.dist))
+        setDT(count.dist.tb,keep.rownames=T)
+        count.dist.melt.tb <- melt(count.dist.tb,id.vars="rn")
+        colnames(count.dist.melt.tb) <- c("rid","cid","count")
+        count.dist.melt.ext.tb <- as.data.table(ldply(seq_len(nrow(count.dist.melt.tb)), function(i){
+                               this.row <- count.dist.melt.tb$rid[i]
+                               this.col <- count.dist.melt.tb$cid[i]
+                               this.c <- count.dist.melt.tb$count[i]
+                               other.col.c <- sum.col[this.col]-this.c
+                               this.m <- matrix(c(this.c,
+                                          sum.row[this.row]-this.c,
+                                          other.col.c,
+                                          sum(sum.col)-sum.row[this.row]-other.col.c),
+                                        ncol=2)
+                               res.test <- fisher.test(this.m)
+                               data.frame(rid=this.row,
+                                      cid=this.col,
+                                      p.value=res.test$p.value,
+                                      OR=res.test$estimate)
+                               }))
+        count.dist.melt.ext.tb <- merge(count.dist.melt.tb,count.dist.melt.ext.tb,
+                                        by=c("rid","cid"))
+        count.dist.melt.ext.tb[,p.adj:=p.adjust(p.value,"BH")]
+        return(count.dist.melt.ext.tb)
+    }
+
 	if(byPatient==F){
 		N.o <- table(dat.tb[[colname.cluster]],dat.tb[[colname.tissue]])
-		res.chisq <- chisq.test(N.o)
-		R.oe <- (res.chisq$observed)/(res.chisq$expected)
+        if(method=="chisq"){
+            res.chisq <- chisq.test(N.o)
+            R.oe <- (res.chisq$observed)/(res.chisq$expected)
+            ret <- R.oe
+        }else if(method=="fisher"){
+            count.dist <- N.o[rowSums(N.o) > min.rowSum,,drop=F]
+            count.dist.melt.ext.tb <- .table.fisher(count.dist)
+            dist.p.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.value")
+            dist.padj.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.adj")
+            dist.OR.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="OR")
+            ret <- list("count.dist"=count.dist.melt.ext.tb,
+                        "p.tb"=dist.p.tb,
+                        "padj.tb"=dist.padj.tb,
+                        "OR.tb"=dist.OR.tb)
+        }
 	}else{
 		N.o.byPatient <- table(dat.tb[[colname.patient]],
-							   dat.tb[[cluster.colname]], dat.tb[[colname.tissue]])
-		R.oe <- aaply(N.o.byPatient,1,function(x){
-						 res.chisq <- chisq.test(x)
-						 return((res.chisq$observed)/(res.chisq$expected))
-							  })
+							   dat.tb[[colname.cluster]], dat.tb[[colname.tissue]])
+		ret <- aaply(N.o.byPatient,1,function(x){
+                         if(method=="chisq"){
+						    res.chisq <- chisq.test(x)
+						    return((res.chisq$observed)/(res.chisq$expected))
+                         }else{
+                            res.fisher <- .table.fisher(x)
+                            return(dcast(res.fisher,rid~cid,value.var="OR"))
+                         }
+				})
 	}
-	return(R.oe)
+	return(ret)
 }
 
 #' calculate the log likelihood ratio of each clonotype, accounting the uncertainty of cluster label assignment

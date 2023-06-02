@@ -9,7 +9,9 @@ calTissueDist(
   byPatient = F,
   colname.cluster = "majorCluster",
   colname.patient = "patient",
-  colname.tissue = "loc"
+  colname.tissue = "loc",
+  method = "chisq",
+  min.rowSum = 0
 )
 }
 \arguments{
@@ -22,9 +24,13 @@ calTissueDist(
 \item{colname.patient}{character. which column specify the patient  (default: "patient")}
 
 \item{colname.tissue}{character. which column specify the tissue  (default: "loc")}
+
+\item{method}{character. method to use, one of "chisq", "fisher"  (default: "chisq")}
+
+\item{min.rowSum}{integer. rows with rowSum <= this value will be filtered out (default: 0)}
 }
 \value{
-an array full of R_{o/e}
+an array full of R_{o/e} (method="chisq") or list with components of OR, p.value etc. from fisher.test (method="fisher")
 }
 \description{
 calculate Startrac.dist (tissue distribution preference)
