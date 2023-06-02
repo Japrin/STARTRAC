@@ -36,5 +36,5 @@ an array full of R_{o/e} (method="chisq") or list with components of OR, p.value
 calculate Startrac.dist (tissue distribution preference)
 }
 \details{
-calculate Startrac.dist (tissue distribution preference) which is based on Chisquare test.
+calculate Startrac.dist (tissue distribution preference).
 }

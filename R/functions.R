@@ -149,7 +149,7 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0
 #' @param colname.tissue character. which column specify the tissue  (default: "loc")
 #' @param method character. method to use, one of "chisq", "fisher"  (default: "chisq")
 #' @param min.rowSum integer. rows with rowSum <= this value will be filtered out (default: 0)
-#' @details calculate Startrac.dist (tissue distribution preference) which is based on Chisquare test.
+#' @details calculate Startrac.dist (tissue distribution preference).
 #' @return an array full of R_{o/e} (method="chisq") or list with components of OR, p.value etc. from fisher.test (method="fisher")
 #' @export
 calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
@@ -219,6 +219,76 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
 	}
 	return(ret)
 }
+
+#' plot Startrac.dist (tissue distribution preference)
+#' @import data.table
+#' @importFrom sscVis plotMatrix.simple
+#' @importFrom grid gpar
+#' @param OR.mtx matrix. OR data
+#' @param k integer. for row-clustering. (default: 2)
+#' @param method.distance character. for row-clustering. (default: "cosine")
+#' @param do.hclust logical. for row-clustering. (default: TRUE)
+#' @param out.prefix character. out.prefix  (default: NULL)
+#' @param OR.max double. maximum of OR. ORs > this value will be set to this value (default: 3)
+#' @param exp.name character. legend title (default: expression(italic(OR))
+#' @param p.tb data.table. p.value table. A column "rid" is required. (default: NULL)
+#' @param pdf.width double. pdf width  (default: 5.5)
+#' @param pdf.height double. pdf height  (default: 10)
+#' @param ... parameters passed to sscVis:::plotMatrix.simple().
+#' @details plot Startrac.dist (tissue distribution preference).
+#' @return object returned by sscVis:::plotMatrix.simple()
+#' @export
+plotTissueDist <- function(OR.mtx,k=2,method.distance="cosine",do.hclust=T,
+                            out.prefix=NULL,
+                            OR.max=3,
+                            exp.name=expression(italic(OR)),
+                            p.tb=NULL,
+                            pdf.width = 5.5, pdf.height = 10,...)
+{
+    ### show.number
+    OR.mtx.tmp.txt <- apply(OR.mtx,2,function(x){ ifelse(x> OR.max, sprintf(">%1.0f",OR.max),sprintf("%1.2f",x)) }) 
+    rownames(OR.mtx.tmp.txt) <- rownames(OR.mtx)
+    if(!is.null(p.tb)){
+        p.mtx <- as.matrix(p.tb[,-c("rid")])
+        rownames(p.mtx) <- p.tb[["rid"]]
+        p.mtx <- p.mtx[rownames(OR.mtx.tmp.txt),colnames(OR.mtx.tmp.txt),drop=F]
+        p.mtx.txt <- apply(p.mtx,2,function(x){ ifelse(x < 0.01,"*","") })
+        show.tmp.txt <- matrix(paste0(OR.mtx.tmp.txt,p.mtx.txt),nrow=nrow(OR.mtx.tmp.txt))
+        rownames(show.tmp.txt) <- rownames(OR.mtx.tmp.txt)
+        colnames(show.tmp.txt) <- colnames(OR.mtx.tmp.txt)
+    }else{
+        show.tmp.txt <- OR.mtx.tmp.txt
+    }
+
+    ### clamp 
+    OR.mtx.tmp <- OR.mtx
+    OR.mtx.tmp[OR.mtx.tmp > OR.max] <- OR.max
+    OR.hclust.row <- run.cutree(OR.mtx.tmp,k=k,method.distance=method.distance,method.hclust="ward.D2")
+    OR.hclust.row$branch <- dendextend::set(OR.hclust.row$branch,"branches_lwd", 2)
+    #### ComplexHeatmap_2.2.0 work fine!
+    #### ComplexHeatmap 2.7.1.1011  weird behaviour
+    sscVis:::plotMatrix.simple(OR.mtx.tmp,
+                             col.ht=circlize::colorRamp2(c(0, 1, OR.max), viridis::viridis(3)),
+                             out.prefix=sprintf("%s.tissue.dist.rClust.withDend",out.prefix),
+                             returnHT = T,
+                             show.number=show.tmp.txt,
+                             show.dendrogram=do.hclust,
+                             clust.row=if(do.hclust) OR.hclust.row$branch else FALSE,
+                             row_dend_width = unit(1.5, "cm"),
+                             #par.legend=list(color_bar = "discrete",at=seq(0,4,0.5)),
+                             #waterfall.row=T,par.warterfall = list(score.alpha = 2,do.norm=T),
+                             exp.name=exp.name,
+                             z.hi=OR.max,mytitle = "Tissue Distribution",
+                             #palatte=rev(brewer.pal(n = 7,name = "RdYlBu")),
+                             #palatte=viridis::viridis(7),
+                             par.heatmap=list(cex.row=1.5,
+                                              row_names_gp=grid::gpar(
+                                                #col=col.row.man,
+                                                fontsize=10)),
+                             pdf.width = pdf.width, pdf.height = pdf.height,...)
+  
+}
+
 
 #' calculate the log likelihood ratio of each clonotype, accounting the uncertainty of cluster label assignment
 #' @import data.table
