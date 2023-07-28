@@ -104,6 +104,7 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0
         obj <- getSig(obj,NULL)
         obj
       },cell.data=cell.data,.progress = "none",.parallel=F)
+      names(obj.list) <- patient.vec
     },warning=function(w) {
       if(grepl("... may be used in an incorrect context:",conditionMessage(w)))
         ### strange bug, see https://github.com/hadley/plyr/issues/203
@@ -122,12 +123,16 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0
 #  }
   for(v in ret.slot.names)
   {
-    slot(ret, v) <- slot(obj.proj,v)
-    if(!is.null(obj.list)){
-      slot(ret, v) <- rbind(slot(ret, v),ldply(obj.list,function(obj){
-        slot(obj,v)
-      }))
-    }
+    .tmp.list <- c(obj.proj,obj.list)
+    names(.tmp.list)[1] <- proj
+    slot(ret,v) <- ldply(.tmp.list,function(obj){ slot(obj,v) })
+    .tmp.list <- NULL
+#    slot(ret, v) <- slot(obj.proj,v)
+#    if(!is.null(obj.list)){
+#      slot(ret, v) <- rbind(slot(ret, v),ldply(obj.list,function(obj){
+#        slot(obj,v)
+#      }))
+#    }
   }
   if(verbose==1){
       ret@objects <- c(obj.proj)
