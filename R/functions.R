@@ -125,7 +125,7 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0
   {
     .tmp.list <- c(obj.proj,obj.list)
     names(.tmp.list)[1] <- proj
-    slot(ret,v) <- ldply(.tmp.list,function(obj){ slot(obj,v) })
+    slot(ret,v) <- ldply(.tmp.list,function(obj){ slot(obj,v) },.id=NULL)
     .tmp.list <- NULL
 #    slot(ret, v) <- slot(obj.proj,v)
 #    if(!is.null(obj.list)){

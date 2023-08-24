@@ -484,6 +484,7 @@ StartracOut.plot <- function(obj,index.type,byPatient)
     }
   }else if(index.type=="pairwise.tran"){
     if(nrow(obj@pIndex.tran)==0){ return(NULL) }
+    ## first 3 columns: aid, NCells, majorCluster
     dat.plot <- as.matrix(subset(obj@pIndex.tran,aid==obj@proj)[,c(-1,-2,-3)])
     rownames(dat.plot) <- subset(obj@pIndex.tran,aid==obj@proj)[,3]
     dat.plot[is.na(dat.plot)] <- 0
