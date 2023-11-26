@@ -11,8 +11,12 @@ plotTissueDist(
   do.hclust = T,
   out.prefix = NULL,
   OR.max = 3,
+  OR.min = 0,
+  col.rid = "rid",
+  col.ht = circlize::colorRamp2(c(0, 1, 3), viridis::viridis(3)),
   exp.name = expression(italic(OR)),
   p.tb = NULL,
+  charSig.tb = NULL,
   pdf.width = 5.5,
   pdf.height = 10,
   ...
@@ -31,9 +35,17 @@ plotTissueDist(
 
 \item{OR.max}{double. maximum of OR. ORs > this value will be set to this value (default: 3)}
 
+\item{OR.min}{double. minimum of OR. ORs < this value will be set to this value (default: 0)}
+
+\item{col.rid}{character. column indicating row ID (default: "rid")}
+
+\item{col.ht}{vector;}
+
 \item{exp.name}{character. legend title (default: expression(italic(OR))}
 
-\item{p.tb}{data.table. p.value table. A column "rid" is required. (default: NULL)}
+\item{p.tb}{data.table. p.value table. A column indicated by col.rid is required. (default: NULL)}
+
+\item{charSig.tb}{data.table. charSig table. A column indicated by col.rid is required. (default: NULL)}
 
 \item{pdf.width}{double. pdf width  (default: 5.5)}
 

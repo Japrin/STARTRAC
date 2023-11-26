@@ -25,7 +25,7 @@ calTissueDist(
 
 \item{colname.tissue}{character. which column specify the tissue  (default: "loc")}
 
-\item{method}{character. method to use, one of "chisq", "fisher"  (default: "chisq")}
+\item{method}{character. method to use, one of "chisq", "fisher", and "freq"  (default: "chisq")}
 
 \item{min.rowSum}{integer. rows with rowSum <= this value will be filtered out (default: 0)}
 }

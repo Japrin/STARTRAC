@@ -152,7 +152,7 @@ Startrac.run <- function(cell.data, proj="CRC", cores=NULL,n.perm=NULL,verbose=0
 #' @param colname.cluster character. which column specify the cluster (default: "majorCluster")
 #' @param colname.patient character. which column specify the patient  (default: "patient")
 #' @param colname.tissue character. which column specify the tissue  (default: "loc")
-#' @param method character. method to use, one of "chisq", "fisher"  (default: "chisq")
+#' @param method character. method to use, one of "chisq", "fisher", and "freq"  (default: "chisq")
 #' @param min.rowSum integer. rows with rowSum <= this value will be filtered out (default: 0)
 #' @details calculate Startrac.dist (tissue distribution preference).
 #' @return an array full of R_{o/e} (method="chisq") or list with components of OR, p.value etc. from fisher.test (method="fisher")
@@ -192,36 +192,85 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
         return(count.dist.melt.ext.tb)
     }
 
-	if(byPatient==F){
-		N.o <- table(dat.tb[[colname.cluster]],dat.tb[[colname.tissue]])
-        if(method=="chisq"){
-            res.chisq <- chisq.test(N.o)
-            R.oe <- (res.chisq$observed)/(res.chisq$expected)
-            ret <- R.oe
-        }else if(method=="fisher"){
-            count.dist <- N.o[rowSums(N.o) > min.rowSum,,drop=F]
-            count.dist.melt.ext.tb <- .table.fisher(count.dist)
-            dist.p.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.value")
-            dist.padj.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.adj")
-            dist.OR.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="OR")
-            ret <- list("count.dist"=count.dist.melt.ext.tb,
-                        "p.tb"=dist.p.tb,
-                        "padj.tb"=dist.padj.tb,
-                        "OR.tb"=dist.OR.tb)
+    if(method=="freq"){
+        ncount.sampleID <- dat.tb[,.(N.tot=.N),by=c("sampleID","loc")]
+        ncount.sampleID_mcls <- dat.tb[,.(N.mcls=.N),by=c("sampleID","loc","majorCluster")]
+        ncount.sampleID_mcls <- melt(dcast(ncount.sampleID_mcls,sampleID+loc~majorCluster,
+                                           value.var="N.mcls",fill=0),
+                                     id.vars=c("sampleID","loc"),
+                                     variable.name="majorCluster",
+                                     value.name="N.mcls")
+        ncount.sampleID_mcls <- merge(ncount.sampleID_mcls,ncount.sampleID,by=c("sampleID","loc"))
+        ncount.sampleID_mcls[,freq.mcls:=N.mcls/N.tot]
+        res <- ncount.sampleID_mcls[,{
+                                        loc.vec <- unique(.SD$loc)
+                                        o.tb <- as.data.table(ldply(loc.vec,function(xx){
+                                            freq.x <- .SD[loc==xx,][["freq.mcls"]]
+                                            #freq.y <- .SD[["freq.mcls"]]
+                                            freq.y <- .SD[loc!=xx,][["freq.mcls"]]
+                                            if(length(freq.x) >= 3)
+                                            {
+                                                oo.t <- t.test(freq.x,freq.y)
+                                                oo.w <- wilcox.test(freq.x,freq.y)
+                                                data.table(loc=xx,
+                                                       logFC=log2(mean(freq.x)/mean(freq.y)),
+                                                       p.value.t=oo.t$p.value,
+                                                       p.value.w=oo.w$p.value)
+                                            }else{
+                                                NULL
+                                            }
+                                        }))
+                                    },by=c("majorCluster")][order(majorCluster,loc),]
+        res[,FDR.t:=p.adjust(p.value.t,"BH")]
+        res[,FDR.w:=p.adjust(p.value.w,"BH")]
+
+        res[,char.sig:=""]
+        res[FDR.t < 0.01 & p.value.t < 0.05,char.sig:="\U2020"]
+        res[FDR.t < 0.05,char.sig:="\U2731"]
+        res[FDR.t < 0.01,char.sig:="\U2731\U2731"]
+        #res[FDR.t < 0.05,char.sig:="*"]
+        #res[FDR.t < 0.01,char.sig:="**"]
+        dist.charSig.tb <- dcast(res,majorCluster~loc,value.var="char.sig")
+        dist.logFC.tb <- dcast(res,majorCluster~loc,value.var="logFC")
+        dist.FDR.tb <- dcast(res,majorCluster~loc,value.var="FDR.t")
+        ret <- list("res"=res,
+                    "dist.logFC.tb"=dist.logFC.tb,
+                    "dist.FDR.tb"=dist.FDR.tb,
+                    "dist.charSig.tb"=dist.charSig.tb)
+
+
+    }else{
+        if(byPatient==F){
+            N.o <- table(dat.tb[[colname.cluster]],dat.tb[[colname.tissue]])
+            if(method=="chisq"){
+                res.chisq <- chisq.test(N.o)
+                R.oe <- (res.chisq$observed)/(res.chisq$expected)
+                ret <- R.oe
+            }else if(method=="fisher"){
+                count.dist <- N.o[rowSums(N.o) > min.rowSum,,drop=F]
+                count.dist.melt.ext.tb <- .table.fisher(count.dist)
+                dist.p.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.value")
+                dist.padj.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.adj")
+                dist.OR.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="OR")
+                ret <- list("count.dist"=count.dist.melt.ext.tb,
+                            "p.tb"=dist.p.tb,
+                            "padj.tb"=dist.padj.tb,
+                            "OR.tb"=dist.OR.tb)
+            }
+        }else{
+            N.o.byPatient <- table(dat.tb[[colname.patient]],
+                                   dat.tb[[colname.cluster]], dat.tb[[colname.tissue]])
+            ret <- aaply(N.o.byPatient,1,function(x){
+                             if(method=="chisq"){
+                                res.chisq <- chisq.test(x)
+                                return((res.chisq$observed)/(res.chisq$expected))
+                             }else{
+                                res.fisher <- .table.fisher(x)
+                                return(dcast(res.fisher,rid~cid,value.var="OR"))
+                             }
+                    })
         }
-	}else{
-		N.o.byPatient <- table(dat.tb[[colname.patient]],
-							   dat.tb[[colname.cluster]], dat.tb[[colname.tissue]])
-		ret <- aaply(N.o.byPatient,1,function(x){
-                         if(method=="chisq"){
-						    res.chisq <- chisq.test(x)
-						    return((res.chisq$observed)/(res.chisq$expected))
-                         }else{
-                            res.fisher <- .table.fisher(x)
-                            return(dcast(res.fisher,rid~cid,value.var="OR"))
-                         }
-				})
-	}
+    }
 	return(ret)
 }
 
@@ -235,8 +284,12 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
 #' @param do.hclust logical. for row-clustering. (default: TRUE)
 #' @param out.prefix character. out.prefix  (default: NULL)
 #' @param OR.max double. maximum of OR. ORs > this value will be set to this value (default: 3)
+#' @param OR.min double. minimum of OR. ORs < this value will be set to this value (default: 0)
+#' @param col.rid character. column indicating row ID (default: "rid")
+#' @param col.ht vector;
 #' @param exp.name character. legend title (default: expression(italic(OR))
-#' @param p.tb data.table. p.value table. A column "rid" is required. (default: NULL)
+#' @param p.tb data.table. p.value table. A column indicated by col.rid is required. (default: NULL)
+#' @param charSig.tb data.table. charSig table. A column indicated by col.rid is required. (default: NULL)
 #' @param pdf.width double. pdf width  (default: 5.5)
 #' @param pdf.height double. pdf height  (default: 10)
 #' @param ... parameters passed to sscVis:::plotMatrix.simple().
@@ -246,21 +299,37 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
 plotTissueDist <- function(OR.mtx,k=2,method.distance="cosine",do.hclust=T,
                             out.prefix=NULL,
                             OR.max=3,
+                            OR.min=0,
+                            col.rid="rid",
+                            col.ht=circlize::colorRamp2(c(0, 1, 3), viridis::viridis(3)),
                             exp.name=expression(italic(OR)),
                             p.tb=NULL,
+                            charSig.tb=NULL,
                             pdf.width = 5.5, pdf.height = 10,...)
 {
     ### show.number
-    OR.mtx.tmp.txt <- apply(OR.mtx,2,function(x){ ifelse(x> OR.max, sprintf(">%1.0f",OR.max),sprintf("%1.2f",x)) }) 
+    #OR.mtx.tmp.txt <- apply(OR.mtx,2,function(x){ ifelse(x > OR.max, sprintf(">%1.0f",OR.max),sprintf("%1.2f",x)) })
+    #OR.mtx.tmp.txt <- apply(OR.mtx.tmp.txt,2,function(x){ ifelse(x < OR.min, sprintf("<%1.0f",OR.min),sprintf("%1.2f",x)) })
+    OR.mtx.tmp.txt <- apply(OR.mtx,2,function(x){ ifelse(x > OR.max,
+                                                         sprintf(">%1.0f",OR.max),
+                                                         ifelse(x < OR.min,sprintf("<%1.0f",OR.min),sprintf("%1.2f",x))
+                                                         ) })
     rownames(OR.mtx.tmp.txt) <- rownames(OR.mtx)
     if(!is.null(p.tb)){
-        p.mtx <- as.matrix(p.tb[,-c("rid")])
-        rownames(p.mtx) <- p.tb[["rid"]]
+        p.mtx <- as.matrix(p.tb[,-c(col.rid),with=F])
+        rownames(p.mtx) <- p.tb[[col.rid]]
         p.mtx <- p.mtx[rownames(OR.mtx.tmp.txt),colnames(OR.mtx.tmp.txt),drop=F]
-        p.mtx.txt <- apply(p.mtx,2,function(x){ ifelse(x < 0.01,"*","") })
+        #p.mtx.txt <- apply(p.mtx,2,function(x){ ifelse(x < 0.01,"*","") })
+        p.mtx.txt <- apply(p.mtx,2,function(x){ ifelse(x < 0.05,ifelse(x < 0.01,"**","*"),"") })
+        p.mtx.txt[is.na(p.mtx.txt)] <- ""
         show.tmp.txt <- matrix(paste0(OR.mtx.tmp.txt,p.mtx.txt),nrow=nrow(OR.mtx.tmp.txt))
         rownames(show.tmp.txt) <- rownames(OR.mtx.tmp.txt)
         colnames(show.tmp.txt) <- colnames(OR.mtx.tmp.txt)
+    }else if(!is.null(charSig.tb)){
+        charSig.mtx <- as.matrix(charSig.tb[,-c(col.rid),with=F])
+        rownames(charSig.mtx) <- charSig.tb[[col.rid]]
+        charSig.mtx <- charSig.mtx[rownames(OR.mtx),colnames(OR.mtx),drop=F]
+        show.tmp.txt <- charSig.mtx
     }else{
         show.tmp.txt <- OR.mtx.tmp.txt
     }
@@ -268,12 +337,13 @@ plotTissueDist <- function(OR.mtx,k=2,method.distance="cosine",do.hclust=T,
     ### clamp 
     OR.mtx.tmp <- OR.mtx
     OR.mtx.tmp[OR.mtx.tmp > OR.max] <- OR.max
+    OR.mtx.tmp[OR.mtx.tmp < OR.min] <- OR.min
     OR.hclust.row <- run.cutree(OR.mtx.tmp,k=k,method.distance=method.distance,method.hclust="ward.D2")
     OR.hclust.row$branch <- dendextend::set(OR.hclust.row$branch,"branches_lwd", 2)
     #### ComplexHeatmap_2.2.0 work fine!
     #### ComplexHeatmap 2.7.1.1011  weird behaviour
     sscVis:::plotMatrix.simple(OR.mtx.tmp,
-                             col.ht=circlize::colorRamp2(c(0, 1, OR.max), viridis::viridis(3)),
+                             col.ht=col.ht,
                              out.prefix=sprintf("%s.tissue.dist.rClust.withDend",out.prefix),
                              returnHT = T,
                              show.number=show.tmp.txt,
@@ -283,7 +353,9 @@ plotTissueDist <- function(OR.mtx,k=2,method.distance="cosine",do.hclust=T,
                              #par.legend=list(color_bar = "discrete",at=seq(0,4,0.5)),
                              #waterfall.row=T,par.warterfall = list(score.alpha = 2,do.norm=T),
                              exp.name=exp.name,
-                             z.hi=OR.max,mytitle = "Tissue Distribution",
+                             z.hi=OR.max,
+                             z.lo=OR.min,
+                             mytitle = "Tissue Distribution",
                              #palatte=rev(brewer.pal(n = 7,name = "RdYlBu")),
                              #palatte=viridis::viridis(7),
                              par.heatmap=list(cex.row=1.5,
