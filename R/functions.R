@@ -225,7 +225,8 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
         res[,FDR.w:=p.adjust(p.value.w,"BH")]
 
         res[,char.sig:=""]
-        res[FDR.t < 0.01 & p.value.t < 0.05,char.sig:="\U2020"]
+        #res[FDR.t < 0.01 & p.value.t < 0.05,char.sig:="\U2020"]
+        res[FDR.t < 0.10 & p.value.t < 0.05,char.sig:="\U2020"]
         res[FDR.t < 0.05,char.sig:="\U2731"]
         res[FDR.t < 0.01,char.sig:="\U2731\U2731"]
         #res[FDR.t < 0.05,char.sig:="*"]
@@ -249,13 +250,19 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
             }else if(method=="fisher"){
                 count.dist <- N.o[rowSums(N.o) > min.rowSum,,drop=F]
                 count.dist.melt.ext.tb <- .table.fisher(count.dist)
+                count.dist.melt.ext.tb[,char.sig:=""]
+                count.dist.melt.ext.tb[p.adj < 0.1 & p.value < 0.05,char.sig:="\U2020"]
+                count.dist.melt.ext.tb[p.adj < 0.05,char.sig:="\U2731"]
+                count.dist.melt.ext.tb[p.adj < 0.01,char.sig:="\U2731\U2731"]
                 dist.p.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.value")
                 dist.padj.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="p.adj")
                 dist.OR.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="OR")
+                dist.charSig.tb <- dcast(count.dist.melt.ext.tb,rid~cid,value.var="char.sig")
                 ret <- list("count.dist"=count.dist.melt.ext.tb,
                             "p.tb"=dist.p.tb,
                             "padj.tb"=dist.padj.tb,
-                            "OR.tb"=dist.OR.tb)
+                            "OR.tb"=dist.OR.tb,
+                            "charSig.tb"=dist.charSig.tb)
             }
         }else{
             N.o.byPatient <- table(dat.tb[[colname.patient]],
