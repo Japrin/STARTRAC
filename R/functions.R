@@ -47,6 +47,39 @@ Gini <- function(y)
   return(G)
 }
 
+#' perform fisher test to identify the significance of each cell in the count.dist
+#' @param count.dist table;
+#' @param sum.col vector;
+#' @param sum.row vector;
+do.table.fisher <- function(count.dist,sum.col=NULL,sum.row=NULL)
+{
+    if(is.null(sum.col)){ sum.col <- colSums(count.dist) }
+    if(is.null(sum.row)){ sum.row <- rowSums(count.dist) }
+    count.dist.tb <- as.data.frame(unclass(count.dist))
+    setDT(count.dist.tb,keep.rownames=T)
+    count.dist.melt.tb <- melt(count.dist.tb,id.vars="rn")
+    colnames(count.dist.melt.tb) <- c("rid","cid","count")
+    count.dist.melt.ext.tb <- as.data.table(ldply(seq_len(nrow(count.dist.melt.tb)), function(i){
+                           this.row <- count.dist.melt.tb$rid[i]
+                           this.col <- count.dist.melt.tb$cid[i]
+                           this.c <- count.dist.melt.tb$count[i]
+                           other.col.c <- sum.col[this.col]-this.c
+                           this.m <- matrix(c(this.c,
+                                      sum.row[this.row]-this.c,
+                                      other.col.c,
+                                      sum(sum.col)-sum.row[this.row]-other.col.c),
+                                    ncol=2)
+                           res.test <- fisher.test(this.m)
+                           data.frame(rid=this.row,
+                                  cid=this.col,
+                                  p.value=res.test$p.value,
+                                  OR=res.test$estimate)
+                           }))
+    count.dist.melt.ext.tb <- merge(count.dist.melt.tb,count.dist.melt.ext.tb,
+                                    by=c("rid","cid"))
+    count.dist.melt.ext.tb[,p.adj:=p.adjust(p.value,"BH")]
+    return(count.dist.melt.ext.tb)
+}
 
 #' warpper function for Startrac analysis
 #' @importFrom data.table dcast
@@ -162,36 +195,7 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
                               method="chisq",min.rowSum=0)
 {
 
-    .table.fisher <- function(count.dist)
-    {
-        sum.col <- colSums(count.dist)
-        sum.row <- rowSums(count.dist)
-        count.dist.tb <- as.data.frame(unclass(count.dist))
-        setDT(count.dist.tb,keep.rownames=T)
-        count.dist.melt.tb <- melt(count.dist.tb,id.vars="rn")
-        colnames(count.dist.melt.tb) <- c("rid","cid","count")
-        count.dist.melt.ext.tb <- as.data.table(ldply(seq_len(nrow(count.dist.melt.tb)), function(i){
-                               this.row <- count.dist.melt.tb$rid[i]
-                               this.col <- count.dist.melt.tb$cid[i]
-                               this.c <- count.dist.melt.tb$count[i]
-                               other.col.c <- sum.col[this.col]-this.c
-                               this.m <- matrix(c(this.c,
-                                          sum.row[this.row]-this.c,
-                                          other.col.c,
-                                          sum(sum.col)-sum.row[this.row]-other.col.c),
-                                        ncol=2)
-                               res.test <- fisher.test(this.m)
-                               data.frame(rid=this.row,
-                                      cid=this.col,
-                                      p.value=res.test$p.value,
-                                      OR=res.test$estimate)
-                               }))
-        count.dist.melt.ext.tb <- merge(count.dist.melt.tb,count.dist.melt.ext.tb,
-                                        by=c("rid","cid"))
-        count.dist.melt.ext.tb[,p.adj:=p.adjust(p.value,"BH")]
-        return(count.dist.melt.ext.tb)
-    }
-
+    
     if(method=="freq"){
         ncount.sampleID <- dat.tb[,.(N.tot=.N),by=c("sampleID","loc")]
         ncount.sampleID_mcls <- dat.tb[,.(N.mcls=.N),by=c("sampleID","loc","majorCluster")]
@@ -249,7 +253,7 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
                 ret <- R.oe
             }else if(method=="fisher"){
                 count.dist <- N.o[rowSums(N.o) > min.rowSum,,drop=F]
-                count.dist.melt.ext.tb <- .table.fisher(count.dist)
+                count.dist.melt.ext.tb <- do.table.fisher(count.dist)
                 count.dist.melt.ext.tb[,char.sig:=""]
                 count.dist.melt.ext.tb[p.adj < 0.1 & p.value < 0.05,char.sig:="\U2020"]
                 count.dist.melt.ext.tb[p.adj < 0.05,char.sig:="\U2731"]
@@ -272,7 +276,7 @@ calTissueDist <- function(dat.tb,byPatient=F,colname.cluster="majorCluster",
                                 res.chisq <- chisq.test(x)
                                 return((res.chisq$observed)/(res.chisq$expected))
                              }else{
-                                res.fisher <- .table.fisher(x)
+                                res.fisher <- do.table.fisher(x)
                                 return(dcast(res.fisher,rid~cid,value.var="OR"))
                              }
                     })
@@ -312,6 +316,7 @@ plotTissueDist <- function(OR.mtx,k=2,method.distance="cosine",do.hclust=T,
                             exp.name=expression(italic(OR)),
                             p.tb=NULL,
                             charSig.tb=NULL,
+                            mytitle = "Tissue Distribution",
                             pdf.width = 5.5, pdf.height = 10,...)
 {
     ### show.number
@@ -362,7 +367,7 @@ plotTissueDist <- function(OR.mtx,k=2,method.distance="cosine",do.hclust=T,
                              exp.name=exp.name,
                              z.hi=OR.max,
                              z.lo=OR.min,
-                             mytitle = "Tissue Distribution",
+                             #mytitle = "Tissue Distribution",
                              #palatte=rev(brewer.pal(n = 7,name = "RdYlBu")),
                              #palatte=viridis::viridis(7),
                              par.heatmap=list(cex.row=1.5,

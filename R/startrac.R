@@ -144,6 +144,7 @@ Startrac.calIndex <- function(object,cores,n.perm,normEntropy)
                                     "majorCluster"=colnames(object@clonotype.dist.cluster),
                                     "expa"=1-.entropy/.entropy.max,
                                     "gini"=.gini,
+                                    #"diversity"=.entropy,
                                     "NCells"=colSums(object@clonotype.dist.cluster),
                                     #"gini_simpson"=.GS,
                                     stringsAsFactors = F)

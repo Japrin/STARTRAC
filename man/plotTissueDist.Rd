@@ -17,6 +17,7 @@ plotTissueDist(
   exp.name = expression(italic(OR)),
   p.tb = NULL,
   charSig.tb = NULL,
+  mytitle = "Tissue Distribution",
   pdf.width = 5.5,
   pdf.height = 10,
   ...
